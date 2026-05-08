@@ -40,12 +40,22 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
     private final int height;
     private final Random random;
     private int size;
+    private final double probability;
+    private static final int MAX_HEIGHT = 32;
+    private static final double DEFAULT_PROBABILITY = 0.25;
 
     public SkipListSet(int height) {
-        this.head = fillHead(height);
-        this.random = new Random();
-        this.height = height;
+        this(height, DEFAULT_PROBABILITY);
+    }
 
+    public SkipListSet(int height, double probability) {
+        if (height < 0) throw new IllegalArgumentException("height < 0");
+        if (probability < 0) throw new IllegalArgumentException("probability < 0");
+        if (probability >= 1) throw new IllegalArgumentException("probability >= 0");
+        this.height = Math.min(height, MAX_HEIGHT);
+        this.head = fillHead(this.height);
+        this.random = new Random();
+        this.probability = probability;
     }
 
     /*
@@ -68,7 +78,7 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
     @Override
     public boolean add(T t) {
         Objects.requireNonNull(t);
-        int maxLevel = random.nextInt(height) + 1;
+        int maxLevel = generateLevel();
         Node<T>[] hs = this.head.nodes();
         Node<T>[] ns = fillTo(t, maxLevel).nodes();
         Node<T> curr = null;
@@ -390,6 +400,14 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
         }
     }
 
+    private int generateLevel() {
+        int level = 1;
+        while (random.nextDouble() < probability && level < height) {
+            level++;
+        }
+        return level;
+    }
+
     static class HeadNode<T extends Comparable<T>> extends Node<T> {
 
         public HeadNode(T value, Node<T>[] nodes) {
@@ -401,5 +419,4 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
             throw new UnsupportedOperationException("head#prev == null");
         }
     }
-
 }
