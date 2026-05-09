@@ -17,7 +17,7 @@ import java.util.*;
 /// Higher levels act as express lanes, allowing traversal to skip over large portions
 /// of the list.
 ///
-/// A sentinel head node spans all levels and serves as the fixed entry point for
+/// A sentinel head and tail node spans all levels and serves as the fixed entry point for
 /// traversal, eliminating boundary edge cases during search and mutation. Each node
 /// holds an array of forward pointers, one per level it participates in, enabling
 /// efficient multi-level linking and unlinking during [Set#add] and [Set#remove] operations.
@@ -58,23 +58,23 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
         this.probability = probability;
     }
 
-    /*
-      Node#1 T = 1, next = Node#2, prev = head
-    * Node#2 T = 3 next = null, prev = Node#1
-    * Node#3 T = 2, next = null, prev = null
-    Node#3 next -> Node#2, Node#3 prev -> Node#2.prev, Node3#prev -> Node#3, Node#2prev -> Node#2
-    * */
+    void link(Node<T> curr, Node<T> node) {
+        var prev = curr.prev();
+        prev.setNext(node);
+        curr.setPrev(node);
+        node.setNext(curr);
+        node.setPrev(prev);
+    }
+
 
     /*
-    * Create a node at max up to a level (h - 1)
-    * Starting from the sentinel's (root) next we walk forwards in the linked list. While walking, we peek ahead (to prevent null checks)
-    *   If a value x.equals(t) we return false
-    *   Else we check if x.compareTo(t) > 0, if so, we check next,
-    *       if next.x == null, we
-    *       if next.x.compareTo(t) <= 0, we link the node
-    *   We then check if our next or prev have a
-    *   return true
+    * L1: 1,2,3,5,6
+    * L2: 1,3,5
+    * L3: 5
+    * L4: 4
+    * L5:
     * */
+
     @Override
     public boolean add(T t) {
         Objects.requireNonNull(t);
@@ -84,39 +84,30 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
         Node<T> curr = null;
         outer: for (int i = 0; i < maxLevel; ++i) {
             if (curr == null) curr = hs[i];
+
             Node<T> node = ns[i];
-
             while (curr != null) {
+                var next = curr.next();
                 T v = curr.value;
-                if(Objects.equals(v, t)) {
-                    return false;
-                } else if (v != null && t.compareTo(v) <= 0) { //Less than the current node
-                    int nextIndex = i + 1;
-                    link(curr, node);
+                if (Objects.equals(t, v)) return false;
 
-                    if (curr.nodes().length == nextIndex) {
-                        curr = null; //deref
-                        continue outer;
-                    }
+                if (v != null && t.compareTo(v) <= 0) {
+                     link(curr, node);
+                     int nextIdx = i + 1;
+                     if (curr.height <= nextIdx) curr = null;
+                     else curr = curr.nodes()[nextIdx];
 
-                    curr = curr.nodes()[nextIndex];
-                    continue outer;
-                }else if(curr.next() == null) { //EOL (End of list)
+                     continue outer;
+                }else if(next == null) {
                     curr.setNext(node);
                     node.setPrev(curr);
-
-                    //We want to check here, if curr has a node at the next level, if so, we jump to that level otherwise we restart from sentinel
-                    int nextIndex = i + 1;
-                    if (curr.nodes().length == nextIndex) {
-                        curr = null;
-                        continue outer;
-                    }
-
-                    curr = curr.nodes()[nextIndex];
+                    int nextIdx = i + 1;
+                    if (curr.height <= nextIdx) curr = null;
+                    else curr = curr.nodes()[nextIdx];
                     continue outer;
                 }
 
-                curr = curr.next();
+                curr = next;
             }
 
         }
@@ -124,6 +115,7 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
         ++size;
         return true;
     }
+
 
 
     //Start from the bottom level
@@ -286,15 +278,6 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
     }
 
 
-
-    void link(Node<T> curr, Node<T> node) {
-        var prev = curr.prev();
-        prev.setNext(node);
-        curr.setPrev(node);
-        node.setNext(curr);
-        node.setPrev(prev);
-    }
-
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -322,9 +305,9 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
 
      Node<T> fillTo(T value, int height) {
         Node<T>[] nodes = new Node[height];
-        assert height > 0;
+        //assert height > 0;
         for (int i = 0; i < height; ++i) {
-            nodes[i] = new Node<>(value, nodes);
+            nodes[i] = new Node<>(value, height ,nodes);
         }
 
         return nodes[0];
@@ -332,15 +315,14 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
 
     Node<T> fillHead(int height) {
         HeadNode<T>[] nodes = new HeadNode[height];
-        assert height > 0;
         for (int i = 0; i < height; ++i) {
-            nodes[i] = new HeadNode<>(null, nodes);
+            nodes[i] = new HeadNode<>(null, height ,nodes);
         }
 
         return nodes[0];
     }
 
-    static class ListIterator<T extends Comparable<T>> implements Iterator<T> {
+    private static class ListIterator<T extends Comparable<T>> implements Iterator<T> {
 
         private final ArrayList<T> list;
         private int i;
@@ -367,15 +349,16 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
 
     }
 
-    static class Node<T extends Comparable<T>> {
+    private static class Node<T extends Comparable<T>> {
         Node<T>[] nodes;
         Node<T> next; //Next of the node on this level
         Node<T> prev; //Prev of the node on this level
         final T value;
+        final int height;
 
-
-        public Node(T value, Node<T>[] nodes) {
+        public Node(T value, int height ,Node<T>[] nodes) {
             this.nodes = nodes;
+            this.height = height;
             this.value = value;
         }
 
@@ -401,22 +384,30 @@ public class SkipListSet<T extends Comparable<T>> implements Set<T> {
     }
 
     private int generateLevel() {
-        int level = 1;
-        while (random.nextDouble() < probability && level < height) {
-            level++;
-        }
-        return level;
+        double r = random.nextDouble();
+        int level = (int)(Math.log(r) / Math.log(probability)) + 1;
+        return Math.min(level, height);
     }
 
     static class HeadNode<T extends Comparable<T>> extends Node<T> {
 
-        public HeadNode(T value, Node<T>[] nodes) {
-            super(value, nodes);
+        public HeadNode(T value, int height ,Node<T>[] nodes) {
+            super(value, height, nodes);
         }
 
         @Override
         public void setPrev(Node<T> prev) {
             throw new UnsupportedOperationException("head#prev == null");
         }
+
+    }
+
+
+
+
+    static void main() {
+        var set = new SkipListSet<Integer>(5);
+        for (int i = 10; i > 0; --i) set.add(i);
+        IO.println(set);
     }
 }
