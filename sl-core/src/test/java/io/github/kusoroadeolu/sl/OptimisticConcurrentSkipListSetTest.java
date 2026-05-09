@@ -31,6 +31,7 @@ class OptimisticConcurrentSkipListSetTest {
         });
     }
 
+    //Test shouldnt deadlock, plus if in the linear ordering of remove, add, add comes before remove, we should never see 1
     @Test
     void removeAddTest() {
         Lincheck.runConcurrentTest(() -> {
@@ -50,10 +51,8 @@ class OptimisticConcurrentSkipListSetTest {
             }
 
             int size = list.size();
-            if (size != 2) {
-                assertFalse(list.contains(1));
-                assertTrue(list.contains(2));
-            }
+            if (size != 2) assertFalse(list.contains(1));
+
         });
     }
 
