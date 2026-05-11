@@ -34,6 +34,10 @@ import java.util.*;
 /// | `contains`  | O(log n)    |
 ///
 /// @param <T> the type of elements held in this set; must implement [Comparable]
+///
+///
+/// [PUGH](https://15721.courses.cs.cmu.edu/spring2016/papers/pugh-skiplists1990.pdf)
+
 @SuppressWarnings("unchecked")
 public class SkipListSet<T extends Comparable<T>> implements Set<T> {
     private final Node<T> head;

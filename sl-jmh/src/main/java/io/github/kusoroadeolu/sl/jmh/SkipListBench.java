@@ -1,7 +1,6 @@
 package io.github.kusoroadeolu.sl.jmh;
 
 import io.github.kusoroadeolu.sl.FineGrainedSkipList;
-import io.github.kusoroadeolu.sl.JDKSkipListSet;
 import io.github.kusoroadeolu.sl.OptimisticConcurrentSkipListSet;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
@@ -11,6 +10,7 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.Throughput)
@@ -63,17 +63,19 @@ SkipListBench.twoThreads          FG  thrpt   30   3.216 ± 0.138  ops/us
 * */
 public class SkipListBench {
     private Set<Integer> set;
-     @Param({"JDK", "OPT", "FG"}) //JDK, Ours, fine grained(from a random repository that implemented the same paper)
+    // @Param({"JDK", "OPT", "FG"}) //JDK, Ours, fine grained(from a random repository that implemented the same paper)
     private String type;
 
     @Setup
     public void setup() {
-        set = switch (type) {
-            case "JDK" -> new JDKSkipListSet<>();
-            case "OPT" -> new OptimisticConcurrentSkipListSet<>(62);
-            case "FG" -> new FineGrainedSkipList(62);
-            default -> throw new IllegalArgumentException();
-        };
+//        set = switch (type) {
+//            case "JDK" -> new ConcurrentSkipListSet<>();
+//            case "OPT" -> new OptimisticConcurrentSkipListSet<>(62);
+//            case "FG" -> new FineGrainedSkipList(62);
+//            default -> throw new IllegalArgumentException();
+//        };
+
+        set = new OptimisticConcurrentSkipListSet<>(124);
     }
 
     @Threads(2)

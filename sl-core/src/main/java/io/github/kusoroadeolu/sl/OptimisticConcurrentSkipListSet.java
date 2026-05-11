@@ -2,12 +2,12 @@ package io.github.kusoroadeolu.sl;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static io.github.kusoroadeolu.sl.Utils.generateLevel;
 
 
 /*
@@ -58,7 +58,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author kusoroadeolu
  * */
 @SuppressWarnings("unchecked")
-public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements Set<T> {
+public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements ConcurrentListSet<T> {
     private final Node<T> left;
     private final Node<T> right;
     private final int height;
@@ -66,7 +66,6 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
     private final ThreadLocal<Node<T>[]> preds;
     private final ThreadLocal<Node<T>[]> succs;
     private volatile int chl; //Current highest level used by the findNode method to avoid traversing from the max height every iteration
-    private static final double PROBABILITY = 0.5;
 
     public OptimisticConcurrentSkipListSet(int height) {
         this.left = new LeftNode<>(null, height);
@@ -99,12 +98,13 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
         return CHL.compareAndSet(this, seen, ml);
     }
 
+    @Override
     public boolean add(T t) {
         Objects.requireNonNull(t);
-        int maxLevel = generateLevel();
-        int seenMaxLevel = lopCurrentMaxLevel(); //Weak read
-        int h = maxLevel > seenMaxLevel ? height - 1 : seenMaxLevel;  //If the max level is greater than seen max level, which just start from the height, otherwise we start from seen max level
-        // A stale read is alright here
+        int ht = height;
+        int maxLevel = generateLevel(ht);
+        int seenMaxLevel = lopCurrentMaxLevel(); // A delayed read is alright here
+        int h = Math.max(ht - 1, seenMaxLevel);  //If the max level is greater than seen max level, which just start from the height, otherwise we start from seen max level
         Node<T>[] preds = this.preds.get();
         Node<T>[] succs = this.succs.get();
         outer: while (true) {
@@ -114,7 +114,6 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
                 var marked = seen.loMarked();
                 if (!marked) { //If not deleted
                     while (!seen.loFullyLinked()) Thread.onSpinWait(); //From my prev experience a spin wait over long periods of time could kill perf, we could park for 1 nanos here
-                    // or though while we're violating the atomicity invariant of our linearizability point, we could just return
                     return false;
                 }
 
@@ -163,9 +162,9 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
 
     public boolean remove(Object o) {
         Objects.requireNonNull(o);
+        T t = (T) o;
         Node<T>[] preds = this.preds.get();
         Node<T>[] succs = this.succs.get();
-        T t = (T) o;
         boolean isMarked = false;
         outer: while (true) {
             int lFound = findNode(preds, succs, loCurrentMaxLevel(), t , Operation.REMOVE); //We use a stronger read to prevent the
@@ -224,11 +223,10 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
         return size() == 0;
     }
 
-    public boolean contains(Object o) {
-        T t = (T) o;
+    public boolean contains(Object t) {
         Node<T>[] preds = this.preds.get();
         Node<T>[] succs = this.succs.get();
-        int lFound = findNode(preds, succs, lopCurrentMaxLevel() , t, Operation.CONTAINS); //A weaker read is alright here, compared to remove/add, where we need stronger visibility guarantees
+        int lFound = findNode(preds, succs, lopCurrentMaxLevel() , (T) t, Operation.CONTAINS); //A weaker read is alright here, compared to remove/add, where we need stronger visibility guarantees
         if (lFound == -1) return false;
         var node = succs[lFound];
         return node.loFullyLinked() && !node.loMarked();
@@ -261,7 +259,7 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
     }
 
     boolean okToDelete(Node<T> node, int maxLevel) {
-        return node.loFullyLinked() && !node.loMarked() && (node.height - 1) == maxLevel;
+        return node.loFullyLinked() && !node.loMarked() && node.height == maxLevel;
     }
 
     int findNode(Node<T>[] preds, Node<T>[] succs, int seen ,T t, Operation op) {
@@ -282,6 +280,7 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
                     succs[layer] = curr;
                     return layer;
                 }
+
                 found = layer;
             }
 
@@ -292,61 +291,22 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
         return found;
     }
 
+    void increment() {
+        size.increment();
+    }
+
+    void decrement(){
+        size.decrement();
+    }
+
     int compare(T t, Node<T> curr, Node<T> r, Node<T> l) {
         if (curr == r) return -1;       // right sentinel, stop
         if (curr == l) return 1;     // left sentinel, keep going (shouldn't really happen)
         return t.compareTo(curr.v);
     }
 
-    private int generateLevel() {
-        double r = ThreadLocalRandom.current().nextDouble();
-        int level = (int)(Math.log(r) / Math.log(PROBABILITY)) + 1;
-        return Math.min(level, height);
-    }
 
-    @Override
-    public Iterator<T> iterator() {
-        return null;
-    }
-
-
-    @Override
-    public Object[] toArray() {
-        return new Object[0];
-    }
-
-    @Override
-    public <T1> T1[] toArray(T1[] a) {
-        return null;
-    }
-
-    @Override
-    public boolean containsAll( Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public boolean addAll(Collection<? extends T> c) {
-        return false;
-    }
-
-    @Override
-    public boolean retainAll(Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public boolean removeAll(Collection<?> c) {
-        return false;
-    }
-
-    @Override
-    public void clear() {
-
-    }
-
-
-    static class Node<T extends Comparable<T>> {
+    private static class Node<T extends Comparable<T>> {
         final T v;
         final Node<T>[] nexts;
         final int height;
@@ -405,7 +365,7 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
     }
 
     //Left sentinel node
-    static class LeftNode<T extends Comparable<T>> extends Node<T>{
+    private static class LeftNode<T extends Comparable<T>> extends Node<T>{
 
 
         public LeftNode(T v, int height) {
@@ -418,7 +378,7 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
         }
     }
 
-    static class RightNode<T extends Comparable<T>> extends Node<T> {
+    private static class RightNode<T extends Comparable<T>> extends Node<T> {
         public RightNode(T v, int height) {
             super(null, height);
         }
@@ -468,13 +428,5 @@ public class OptimisticConcurrentSkipListSet<T extends Comparable<T>> implements
 
     enum Operation{
         ADD, REMOVE, CONTAINS
-    }
-
-    void increment() {
-        size.increment();
-    }
-
-    void decrement(){
-        size.decrement();
     }
 }

@@ -5,12 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class OptimisticConcurrentSkipListSetTest {
-
+class ConcurrentOrderedLinkedListTest {
     @Test
-    void noLostWrites() {
+    void containsTest() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new OptimisticConcurrentSkipListSet<Integer>(4);
+            var list = new ConcurrentOrderedLinkedList<Integer>();
             Thread t1 = new Thread(() -> list.add(1));
             Thread t2 = new Thread(() -> list.add(2));
             Thread t3 = new Thread(() -> list.add(3));
@@ -31,11 +30,11 @@ class OptimisticConcurrentSkipListSetTest {
         });
     }
 
-    //Test shouldnt deadlock, plus if in the linear ordering of remove, add, add comes before remove, we should never see 2
+
     @Test
-    void removeAddTest() {
+    void removeTest() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new OptimisticConcurrentSkipListSet<Integer>(4);
+            var list = new ConcurrentOrderedLinkedList<Integer>();
             Thread t1 = new Thread(() -> list.add(1));
             Thread t2 = new Thread(() -> list.add(2));
             Thread t3 = new Thread(() -> list.add(3));
@@ -57,30 +56,4 @@ class OptimisticConcurrentSkipListSetTest {
 
         });
     }
-
-    @Test
-    void sizeOnDuplicateAddsTest() {
-        Lincheck.runConcurrentTest(() -> {
-            var list = new OptimisticConcurrentSkipListSet<Integer>(4);
-            Thread t1 = new Thread(() -> list.add(1));
-            Thread t2 = new Thread(() -> list.add(2));
-            Thread t3 = new Thread(() -> list.add(2));
-            Thread t4 = new Thread(() -> list.add(2));
-            t1.start(); t2.start(); t3.start(); t4.start();
-
-
-            try {
-                t1.join();
-                t2.join();
-                t3.join();
-                t4.join();
-            }catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-
-            int size = list.size();
-            assertEquals(2, size);
-        });
-    }
-
 }

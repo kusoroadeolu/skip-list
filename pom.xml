@@ -11,6 +11,7 @@
     <modules>
         <module>sl-core</module>
         <module>sl-jmh</module>
+        <module>sl-stress</module>
     </modules>
 
     <properties>
