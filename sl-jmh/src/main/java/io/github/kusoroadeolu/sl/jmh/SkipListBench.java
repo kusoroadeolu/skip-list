@@ -1,14 +1,18 @@
 package io.github.kusoroadeolu.sl.jmh;
 
+import io.github.kusoroadeolu.sl.ConcurrentCollection;
 import io.github.kusoroadeolu.sl.FineGrainedSkipList;
 import io.github.kusoroadeolu.sl.OptimisticSkipList;
+import io.github.kusoroadeolu.sl.SkipListSet;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -61,14 +65,14 @@ SkipListBench.fourThreads      OPT  avgt   30    0.388 ± 0.014  us/op
 SkipListBench.fourThreads       FG  avgt   30    0.982 ± 0.036  us/op
 * */
 public class SkipListBench {
-    private Collection<Integer> set;
+    private ConcurrentCollection<Integer> set;
     @Param({"OPT", "JDK" ,"FG"}) //JDK, Ours, fine grained(from a random repository that implemented the same paper)
     private String type;
 
     @Setup
     public void setup() {
         set = switch (type) {
-            case "JDK" -> new ConcurrentSkipListSet<>();
+            case "JDK" -> new JDKConcurrentSkipList<>();
             case "OPT" -> new OptimisticSkipList<>(62);
             case "FG" -> new FineGrainedSkipList(62);
             default -> throw new IllegalArgumentException();
@@ -103,5 +107,43 @@ public class SkipListBench {
                   //  .addProfiler(JavaFlightRecorderProfiler.class, "dir=C:\\jfr-sl")
                     .build();
             new org.openjdk.jmh.runner.Runner(options).run();        }
+    }
+
+    static class JDKConcurrentSkipList<E extends Comparable<E>> implements ConcurrentCollection<E> {
+        private final ConcurrentSkipListSet<E> set;
+
+        public JDKConcurrentSkipList() {
+            this.set = new ConcurrentSkipListSet<>();
+        }
+
+        @Override
+        public boolean add(E e) {
+            return set.add(e);
+        }
+
+        @Override
+        public boolean remove(Object t) {
+            return set.remove(t);
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return set.isEmpty();
+        }
+
+        @Override
+        public boolean contains(Object t) {
+            return set.contains(t);
+        }
+
+        @Override
+        public int size() {
+            return set.size();
+        }
+
+        @Override
+        public List<E> toList() {
+            return set.stream().toList();
+        }
     }
 }

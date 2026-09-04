@@ -7,6 +7,7 @@ import io.github.kusoroadeolu.sl.UnrolledConcurrentList;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.JavaFlightRecorderProfiler;
+import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
@@ -79,11 +80,11 @@ ElimUnrolledZipfianBenchmark.fullWrite             256  UNROLLED  thrpt   30  1.
 * and tell threads which don't belong to that specific node to retry (which in retrospect now doesnt make sense, since threads
 * backoff and we still hold the lock to the node they need to create a new node to)
 * */
-@BenchmarkMode(Mode.Throughput)
+@BenchmarkMode(Mode.SampleTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
-@Fork(1)
+@Fork(value = 1, jvmArgs = "-XX:TieredStopAtLevel=1")
 @State(Scope.Benchmark)
 @Threads(8)
 
@@ -121,7 +122,6 @@ public class ZipfianBenchmark {
 
     @TearDown
     public void teardown() {
-        System.out.println(set);
         set.clear();
     }
 

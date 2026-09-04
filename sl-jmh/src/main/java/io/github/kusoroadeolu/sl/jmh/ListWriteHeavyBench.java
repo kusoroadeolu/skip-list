@@ -47,7 +47,7 @@ Generated with JMHPretty
 
 * */
 
-@BenchmarkMode(Mode.SampleTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
@@ -56,7 +56,7 @@ Generated with JMHPretty
 public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
     private ConcurrentCollection<Integer> set;
     //
-    @Param({"LF_FR", "PC_LS","ELIM_UNROLLED", "LAZY", "LAZY_COARSE", "LOCK", "UNROLLED", "EF_UNROLLED", "LOCAL_EF" })
+    @Param({"LF_FR", "ELIM_UNROLLED", "LAZY", "LAZY_COARSE", "LOCK", "LOCAL_EF", "PC_LS", "UNROLLED"})
     private String type;
 
     @Setup
@@ -77,10 +77,10 @@ public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
 
     }
 
-    @TearDown
-    public void teardown() {
-        set.clear();
-    }
+//    @TearDown
+//    public void teardown() {
+//        set.clear();
+//    }
 
 
     @Threads(8)
@@ -92,9 +92,9 @@ public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
     private void doWork(Blackhole bh) {
         int key = ThreadLocalRandom.current().nextInt(10_000);
         int op = ThreadLocalRandom.current().nextInt(100);
-        if (op < 50) {
+        if (op < 90) {
             bh.consume(set.add(key));
-        } else if (op < 90) {
+        } else if (op < 99) {
             bh.consume(set.remove(key));
         } else{
             bh.consume(set.contains(key));

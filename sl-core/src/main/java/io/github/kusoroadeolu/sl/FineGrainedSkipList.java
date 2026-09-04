@@ -2,6 +2,7 @@ package io.github.kusoroadeolu.sl;
 
 import java.util.AbstractSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Created by johnstarich on 4/12/17.
  */
 //NOT MINE
-public class FineGrainedSkipList extends AbstractSet<Integer> {
+public class FineGrainedSkipList extends AbstractSet<Integer> implements ConcurrentCollection<Integer>{
     static class Node {
         int key;
         int value;
@@ -284,6 +285,11 @@ public class FineGrainedSkipList extends AbstractSet<Integer> {
 
     public int size() {
         return size.get();
+    }
+
+    @Override
+    public List<Integer> toList() {
+        return List.of();
     }
 
     @Override

@@ -115,10 +115,9 @@ public class ConcurrentOrderedList<T extends Comparable<T>> implements Concurren
                 * Both 'dummy' and 'marked' reads are ordered by loNext write
                 * */
 
-                int res;
-                if ((res = compare(t, curr, l, r)) < 0) return false;
-
-                if (res == 0) {
+                int res = compare(t, curr, l, r);
+                if (res < 0) return false;
+                else if (res == 0) {
                     boolean marked = curr.casMarked();
                     helpUnlink(pred, curr);
                     return marked;
@@ -135,7 +134,7 @@ public class ConcurrentOrderedList<T extends Comparable<T>> implements Concurren
     //Returns the next undead node
     Node<T> helpUnlink(Node<T> pred, Node<T> curr) {
         Node<T> n = curr.loNext();
-        Node<T> d = null;
+        Node<T> d = allocateDummyNode();
 
         for (;;) {
             if (n.isDummy()) {
@@ -143,7 +142,6 @@ public class ConcurrentOrderedList<T extends Comparable<T>> implements Concurren
                 break;
             } else {
 
-                if (d == null) d = new Node<>(null, true);
                 d.spNext(n);
                 if (curr.casNext(n, d)) break; //Swap curr's next to a dummy node
                 //Volatile write
@@ -159,6 +157,10 @@ public class ConcurrentOrderedList<T extends Comparable<T>> implements Concurren
 
         pred.casNext(curr, n); //try to link. failure is alright, another node has unlinked this , all we need is the new unmarked (at this point) curr node
         return n;
+    }
+
+    static <E extends Comparable<E>>Node<E> allocateDummyNode() {
+        return new Node<>(null, true);
     }
 
     @Override

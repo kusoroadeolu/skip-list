@@ -38,7 +38,7 @@ Generated with JMHPretty
 Generated with JMHPretty
 * */
 
-@BenchmarkMode(Mode.SampleTime)
+@BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)

@@ -60,7 +60,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
 
                 List<ThreadNode<T>> validNodes = filterValidNodes(tn, curr ,localValues);
                 int tnSize = validNodes.size();
-                int size = curr.iSize();
+                int size = curr.arraySize();
                 int newSize = size + tnSize;
 
                 if (newSize <= aCap) {
@@ -162,7 +162,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
             try {
                 if (isNotValid(pred, curr)) return false;
 
-                int size = curr.iSize();
+                int size = curr.arraySize();
 
                 int removeCount = removePresentValues(tn, localValues ,curr, aCap);
                 int currSize = size - removeCount;
@@ -182,7 +182,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
 
                     succ.lock(); //Ensure we lock succ to prevent other threads from making structural modifications to its array
                     try {
-                        int succSize = succ.iSize();
+                        int succSize = succ.arraySize();
                         int total = currSize + succSize;
                         int[] emptyIndexes = new int[succSize];
                         findEmptyIndexes(emptyIndexes, aCap ,curr);

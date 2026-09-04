@@ -27,8 +27,9 @@ import java.util.concurrent.locks.ReentrantLock;
 * as a thread traversing through a thread will always have to read a node's next flag to get to its dest
 *
 * To allow threads holding the lock less, while the compiler can optimize loops,
-* on removes we try to pack the lower most index regions of the arrays with values,
-*  though at the cost of reads starting from the higher most index values
+* on removes we try to pack the lower index regions of the array with values,
+* though at the cost of reads starting from the higher most index values to ensure correctness
+*
 * To prevent modifications on nodes who we're splitting or redistributing their arrays,
 * we first copy their arrays before any operation, while this might seem expensive, we are just paying for the cost of a new array object,
 * pre-existing objects are not copied
@@ -37,8 +38,6 @@ import java.util.concurrent.locks.ReentrantLock;
 *  During a remove, when copying a value from a higher index to a lower index, a duplicate value exists in the array at some point
 * This however is mitigated as reader threads traverse the array from the right ensuring no duplicate value is seen during traversals
 *
-*
-* To mitigate some synchronization complexity, we use causal guarantees for the size field (i.e acquire/release modes)
 * */
 /**
  * @author kusoroadeolu
@@ -125,7 +124,7 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
                         var n1 = nodes[0];
                         var n2 = nodes[1];
 
-                        curr.soMarked(); //Prevent reorderings upward
+                        curr.soMarked();
 
                         n1.spNext(n2);
                         n2.spNext(succ);
@@ -166,7 +165,9 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
                 fillValueIndexAndSize(t, curr, aCap ,indices, Operation.REMOVE);
                 int index = indices[0];
                 int size = indices[1];
+
                 if (index  == -1) return false;
+
                 nullifyIndex(index, aCap ,curr);
                 curr.decrement();
                 int currSize = size - 1;
@@ -573,7 +574,7 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
            return (int) SIZE.getAcquire(this);
         }
 
-        int iSize() {
+        int arraySize() {
             int s = 0;
             for (int i = 0; i < array.length; ++i) {
                 if (array[i] != null) ++s;
