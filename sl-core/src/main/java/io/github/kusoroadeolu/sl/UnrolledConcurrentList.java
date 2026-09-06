@@ -54,7 +54,7 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
     private final int maxMerge;
 
     public UnrolledConcurrentList() {
-        this(64, 16);
+        this(128, 16);
     }
 
     public UnrolledConcurrentList(int capacity, int minFull) {
