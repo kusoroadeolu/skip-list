@@ -48,7 +48,7 @@ Generated with JMHPretty
 * */
 
 @BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.MICROSECONDS)
+@OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
@@ -56,7 +56,7 @@ Generated with JMHPretty
 public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
     private ConcurrentCollection<Integer> set;
     //
-    @Param({"LF_FR", "ELIM_UNROLLED", "LAZY", "LAZY_COARSE", "LOCK", "LOCAL_EF", "PC_LS", "UNROLLED"})
+    @Param({"UNROLLED"})
     private String type;
 
     @Setup

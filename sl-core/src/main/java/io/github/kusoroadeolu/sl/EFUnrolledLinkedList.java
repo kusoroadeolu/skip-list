@@ -38,7 +38,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
         var pred = nodes[0];
         var curr = nodes[1];
 
-        if ((tn.node != null && curr != tn.node) || pred.lvMarked() || curr.lvMarked()) {
+        if ((tn.node != null && curr != tn.node) || pred.loMarked() || curr.loMarked()) {
             tn.markAllRetry();
         }
 
@@ -143,7 +143,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
         var pred = nodes[0];
         var curr = nodes[1];
 
-        if ((tn.node != null && curr != tn.node) || pred.lvMarked() || curr.lvMarked()) {
+        if ((tn.node != null && curr != tn.node) || pred.loMarked() || curr.loMarked()) {
             tn.markAllRetry();
         }
 
@@ -237,7 +237,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
         do {
             findNode(t, l, r ,nodes);
             curr = nodes[1];
-        } while (curr.lvMarked());
+        } while (curr.loMarked());
 
         if (curr == r || curr.anchor.compareTo(t) > 0) return false;
 
