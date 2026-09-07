@@ -218,7 +218,7 @@ public class EFUnrolledConcurrentList<T extends Comparable<T>>  implements Concu
         final T value;
         final Operation operation;
         final int index; //Our index in the location array
-        UnrolledConcurrentList.Node<T> node; //The node our value belongs to
+        ConcurrentUnrolledSet.Node<T> node; //The node our value belongs to
         ThreadNode<T> next;
         ThreadNode<T> last;
         volatile int size; //Number of thread nodes, including ours
@@ -295,15 +295,15 @@ public class EFUnrolledConcurrentList<T extends Comparable<T>>  implements Concu
 
     static class LocalValues<T extends Comparable<T>> {
         //Used for storing pred and curr arrays;
-        final UnrolledConcurrentList.Node<T>[] nodes; //0 - pred, 1 - curr
+        final ConcurrentUnrolledSet.Node<T>[] nodes; //0 - pred, 1 - curr
         final int collisionIndex;
 
         public LocalValues(int index) {
-            this.nodes = new UnrolledConcurrentList.Node[2];
+            this.nodes = new ConcurrentUnrolledSet.Node[2];
             this.collisionIndex = index;
         }
 
-        public UnrolledConcurrentList.Node<T>[] nodes() {
+        public ConcurrentUnrolledSet.Node<T>[] nodes() {
             return nodes;
         }
 

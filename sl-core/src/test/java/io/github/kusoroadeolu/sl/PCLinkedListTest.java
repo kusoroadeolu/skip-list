@@ -8,7 +8,7 @@ class PCLinkedListTest {
 
     @Test
     void onFirstAdd_shouldInsertFirstElem() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
 
         var ls = pclist.toList();
@@ -18,7 +18,7 @@ class PCLinkedListTest {
 
     @Test
     void onAdd_inBetweenElems_assertContainsElem() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
         pclist.add(2);
         pclist.add(4);
@@ -30,7 +30,7 @@ class PCLinkedListTest {
 
     @Test
     void onAdd_inBetweenElems_assertNotSameCopiedNodes() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
         pclist.add(2);
         pclist.add(4);
@@ -47,7 +47,7 @@ class PCLinkedListTest {
 
     @Test
     void onRemove_inBetweenElems_assertNotContainsElem() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
         pclist.add(2);
         pclist.add(3);
@@ -61,7 +61,7 @@ class PCLinkedListTest {
 
     @Test
     void onRemoveHead_assertNotContainsElem() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
 
         pclist.remove(1);
@@ -72,7 +72,7 @@ class PCLinkedListTest {
 
     @Test
     void onRemove_inBetweenElems_assertNotSameCopiedNodes() {
-        PCLinkedList<Integer> pclist = new PCLinkedList<>();
+        PathCopyingSet<Integer> pclist = new PathCopyingSet<>();
         pclist.add(1);
         pclist.add(2);
         pclist.add(3);

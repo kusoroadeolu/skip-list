@@ -49,7 +49,7 @@ Generated with JMHPretty
 public class ListReadHeavyBench {
     private ConcurrentCollection<Integer> set;
 
-    @Param({"UNROLLED"})
+    @Param({"LockFreeSet", "UnrolledSet" ,"PathCopyingSet", "EliminationUnrolledSet", "LazyOptimisticSet", "LazyCoarseOptimisticSet", "LockedSet", "EliminationCombiningUnrolledSet"})
     private String type;
 
     static final int PREFILL = 5_00_000;
@@ -58,12 +58,14 @@ public class ListReadHeavyBench {
     @Setup
     public void setup() {
         set = switch (type) {
-            case "LF_FR" -> new ConcurrentOrderedList<>();
-            case "UNROLLED" -> new UnrolledConcurrentList<>();
-            case "LAZY" -> new LazySyncList<>();
-            case "LAZY_COARSE" -> new LazyCoarseSyncList<>();
-            case "LOCK" -> new LockedOrderedLL<>();
-            case "PC_LS" -> new PCLinkedList<>();
+            case "LockFreeSet" -> new ConcurrentOrderedSet<>();
+            case "UnrolledSet" -> new ConcurrentUnrolledSet<>();
+            case "PathCopyingSet" -> new PathCopyingSet<>();
+            case "EliminationUnrolledSet" -> new ConcurrentEliminationUnrolledSet<>();
+            case "LazyOptimisticSet" -> new LazyOptimisticSet<>();
+            case "LazyCoarseOptimisticSet" -> new LazyOptimisticCoarseSet<>();
+            case "LockedSet" -> new LockedOrderedSet<>();
+            case "EliminationCombiningUnrolledSet" -> new ConcurrentEFUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
 

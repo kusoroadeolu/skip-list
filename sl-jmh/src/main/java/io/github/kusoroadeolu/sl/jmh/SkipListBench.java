@@ -3,15 +3,12 @@ package io.github.kusoroadeolu.sl.jmh;
 import io.github.kusoroadeolu.sl.ConcurrentCollection;
 import io.github.kusoroadeolu.sl.FineGrainedSkipList;
 import io.github.kusoroadeolu.sl.OptimisticSkipList;
-import io.github.kusoroadeolu.sl.SkipListSet;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ThreadLocalRandom;

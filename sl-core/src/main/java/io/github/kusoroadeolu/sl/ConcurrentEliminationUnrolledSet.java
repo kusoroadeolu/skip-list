@@ -9,8 +9,8 @@ import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import static io.github.kusoroadeolu.sl.ConcurrentUnrolledSet.Operation;
 import static io.github.kusoroadeolu.sl.EliminationNode.NCPU;
-import static io.github.kusoroadeolu.sl.UnrolledConcurrentList.*;
 
 /*
 An elimination based unrolled linked list.
@@ -38,14 +38,11 @@ improves under contention. However under low and medium contention, I actually e
 the std structure. Due to the fact that under low contention, threads might be spread across the array,
 nullifying the effects of per node concurrency. Another potential benchmark note, this structure might gain a lot when threads are operating
 with values with close key spaces, so threads collide more often in nodes near to each other
-
-Obviously more improvements can be made to this
-For example the start index calculation rather than using thread id. This structure doesnt not maintain the set invariant
 */
 /**
  * @author kusoroadeolu
  * */
-public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
     private final int arrayCap;
     private final int minFull;
     private final int maxMerge;
@@ -59,11 +56,11 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
     private static final int ARENA_LEN = NCPU / 2;
     private static final int ARENA_MASK = ARENA_LEN - 1;
 
-    public EliminationUnrolledConcurrentList() {
+    public ConcurrentEliminationUnrolledSet() {
         this(64, 16);
     }
 
-    public EliminationUnrolledConcurrentList(int arrCap, int minFull) {
+    public ConcurrentEliminationUnrolledSet(int arrCap, int minFull) {
         this.left = new EliminationNode.SentinelEliminationNode<>();
         this.right = new EliminationNode.SentinelEliminationNode<>();
         left.lock();
@@ -86,15 +83,13 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
         int aCap = arrayCap;
         var localArrays = this.localArrays.get();
         var nodes = localArrays.nodes();
-        var indices = localArrays.indices(); //Stores exists in array index and size respectively
-        var metrics = localArrays.metrics();
         ThreadInfo<T> info = null;
         while (true) {
             findNode(t, l, r, nodes);
             var pred = nodes[0];
             var curr = nodes[1];
 
-            if (pred.lvMarked() || curr.lvMarked()) continue;
+            if (pred.lopMarked()) continue;
 
             if (pred.tryLock()) {
                 try {
@@ -109,17 +104,14 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
                         return true;
                     }
 
+                    int valueIndex = findValueIndex(t, curr);
 
-                    fillValueIndexAndSize(t, curr, aCap ,indices, UnrolledConcurrentList.Operation.ADD);
-                    int index = indices[0];
-                    if (index != -1) return false;
+                    if (valueIndex != -1) return false;
 
-
-                    int size = indices[1];
-                    int idx = findAvailableIndex(aCap, curr);
+                    int size = curr.lpSize();
 
                     if (size < aCap) {
-                        curr.soArray(idx, t); //Linearization point
+                        curr.soArray(size, t); //Linearization point
                         curr.increment(1);
                         return true;
                     } else { //Split
@@ -127,8 +119,7 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
                         // So we have a consistent view of curr.next from when we start the split operation
                         try {
                             var succ = curr.lpNext();
-                            var arr = curr.array;
-                            split(arr, aCap ,t ,nodes);
+                            split(aCap ,t ,nodes);
                             var n1 = nodes[0];
                             var n2 = nodes[1];
 
@@ -146,17 +137,13 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
 
                 }finally {
                     pred.unlock();
-                    metrics.incNodeSuccesses();
                 }
             }else {
                 if (info == null)
                     info = new ThreadInfo<>(t, Operation.ADD);
                 var arena = curr.arena;
                 int start = ThreadLocalRandom.current().nextInt();
-                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) {
-                    metrics.incArenaSuccesses();
-                    return true;
-                }
+                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) return true;
             }
         }
     }
@@ -168,37 +155,33 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
         int aCap = arrayCap;
         var localArrays = this.localArrays.get();
         var nodes = localArrays.nodes();
-        var indices = localArrays.indices();
-        var metrics = localArrays.metrics();
         ThreadInfo<T> info = null;
+        boolean unlocked = false;
         while (true) {
             if (!isPresent(t, l, r ,nodes, aCap)) {
                 //Try to scan and match
                 if (info == null) info = new ThreadInfo<>(t, Operation.REMOVE);
-                boolean succeed = scanAndMatch(info, nodes[1].arena, ThreadLocalRandom.current().nextInt());
-                if (succeed) metrics.incArenaSuccesses();
-                return succeed;
+                return scanAndMatch(info, nodes[1].arena, ThreadLocalRandom.current().nextInt());
             }
             var pred = nodes[0];
-            EliminationNode<T> curr =  nodes[1];
-            if (pred.lvMarked() || curr.lvMarked()) continue;
+            var curr =  nodes[1];
+            if (pred.lopMarked()) continue;
 
             if (pred.tryLock()) {
                 try {
                     if (isNotValid(pred, curr)) continue;
-                    fillValueIndexAndSize(t, curr, aCap ,indices, UnrolledConcurrentList.Operation.REMOVE);
-                    int index = indices[0];
-                    int size = indices[1];
+                    int index = findValueIndex(t, curr);
+                    int size = curr.lpSize();
 
                     if (index  == -1) {
+                        pred.unlock();
+                        unlocked = true;
                         //Try to scan and match incase an add thread came while we held the lock
                         if (info == null) info = new ThreadInfo<>(t, Operation.REMOVE);
-                        boolean succeed = scanAndMatch(info, curr.arena, ThreadLocalRandom.current().nextInt());
-                        if (succeed) metrics.incArenaSuccesses();
-                        return succeed;
+                        return scanAndMatch(info, curr.arena, ThreadLocalRandom.current().nextInt());
                     }
 
-                    nullifyIndex(index, aCap ,curr);
+                    removeValueAtIndex(index, size ,curr);
                     curr.decrement();
                     int currSize = size - 1;
 
@@ -219,13 +202,11 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
                         try {
                             int succSize = succ.size();
                             int total = currSize + succSize;
-                            int[] emptyIndexes = new int[succSize];
-                            findEmptyIndexes(emptyIndexes, aCap ,curr);
                             //                Node map: {4=[4, 10, 2], 16=[19]}
                             if (total <= maxMerge) { // Merge to fill the lower indices
-                                merge(curr, succ, aCap ,emptyIndexes);
+                                merge(curr, succ, total);
                             } else { //Redistribute so the lower index is not sparse
-                                redistribute(curr, succ, succSize, aCap ,total);
+                                redistribute(curr, succ, aCap ,total);
                             }
 
                             return true;
@@ -239,18 +220,14 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
 
 
                 }finally {
-                    pred.unlock();
-                    metrics.incNodeSuccesses();
+                    if (!unlocked) pred.unlock();
                 }
             } else {
                 if (info == null)
                     info = new ThreadInfo<>(t, Operation.REMOVE);
                 int start = ThreadLocalRandom.current().nextInt();
                 var arena = curr.arena;
-                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) {
-                    metrics.incArenaSuccesses();
-                    return true;
-                }
+                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) return true;
             }
         }
     }
@@ -304,17 +281,18 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
 
     // ======================= COPIED METHODS FROM UNROLLED ADAPTED TO USE ELIMINATION NODE ==============================
 
-    static <T extends Comparable<T>>void split(Object[] array, int arrayCap ,T t ,EliminationNode<T>[] nodes) {
-        int len = arrayCap + 1;
-        Object[] copy = Arrays.copyOf(array, len); //Copy to prevent modifying the initial array
-        copy[arrayCap] = t;
+    static <T extends Comparable<T>>void split(int capacity ,T t ,EliminationNode<T>[] nodes) {
+        int len = capacity + 1;
+
+        Object[] copy = Arrays.copyOf(nodes[1].array, len); //Copy to prevent modifying the initial array
+        copy[capacity] = t;
 
 
         Arrays.sort(copy);
-        Object[] arr1 = new Object[arrayCap];
-        Object[] arr2 = new Object[arrayCap];
+        Object[] arr1 = new Object[capacity];
+        Object[] arr2 = new Object[capacity];
 
-        int half = len / 2;
+        int half = len >>> 1;
         int rem = len - half;
         System.arraycopy(copy, 0, arr1, 0, half);
         System.arraycopy(copy, half, arr2, 0, rem);
@@ -344,7 +322,7 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
         do {
             findNode(t, l, r ,nodes);
             curr = nodes[1];
-        } while (curr.lvMarked());
+        } while (curr.loMarked());
 
         if (curr == r || curr.anchor.compareTo(t) > 0) return false;
 
@@ -384,7 +362,7 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
         findNode(t, left, right, nodes);
         var curr = nodes[1];
 
-        if (curr == right || curr.lvMarked() || curr.anchor.compareTo(t) > 0) return false;
+        if (curr == right || curr.loMarked() || curr.anchor.compareTo(t) > 0) return false;
 
         for (int i = arrayCap - 1; i >= 0; --i) {
             T v = curr.loArray(i);
@@ -408,135 +386,98 @@ public class EliminationUnrolledConcurrentList<T extends Comparable<T>> implemen
         nodes[0] = pred; nodes[1] = curr;
     }
 
-    static <T extends Comparable<T>>void merge(EliminationNode<T> curr, EliminationNode<T> succ, int arrayCap ,int[] indexes) {
-        for (int i = 0, j = 0; i < arrayCap; ++i) {
-            T t = succ.lpArray(i);
-            if (t != null) {
-                var idx = indexes[j++];
-                curr.soArray(idx, t);
-
-            }
+    static <T extends Comparable<T>>void merge(EliminationNode<T> curr, EliminationNode<T> succ, int totalSize) {
+        int j = 0;
+        for (int i = curr.size(); i < totalSize; ++i) {
+            curr.soArray(i, succ.lpArray(j++));
         }
 
         succ.soMarked();
+
         curr.increment(succ.size());
-        curr.soNext(succ.lpNext());
+        curr.soNext(succ.lpNext()); //Plain read for succ as we already hold its lock
 
     }
 
 
-    static <T extends Comparable<T>>void redistribute(EliminationNode<T> curr, EliminationNode<T> succ, int succSize, int arrayCap ,int total) {
-        Object[] copy = filterNulls(succ.array, succSize);
+    static <T extends Comparable<T>>void redistribute(EliminationNode<T> curr, EliminationNode<T> succ, int capacity, int totalSize) {
+        int succSize = succ.size();
+        Object[] sorted = new Object[succSize];
+        System.arraycopy(succ.array, 0, sorted, 0, succSize);
+        Arrays.sort(sorted);
 
-        int nodeCount = total / 2;
-        int toMove = succSize - nodeCount;
-        Arrays.sort(copy);
-        var nodeArr = Arrays.copyOf(copy, arrayCap);
-        var node = new EliminationNode<>((T) nodeArr[toMove], nodeArr);
+        int elemPerNode = totalSize >>> 1;
+        int elemsForCurr = Math.max(0, succSize - elemPerNode);
 
-        for (int i = 0, j = 0; i < arrayCap; ++i) {
-            if (j == toMove) break;
-            if (curr.lpArray(i) == null) {
-                curr.soArray(i, (T) nodeArr[j]);
-                nodeArr[j++] = null;
-            }
+
+        int start = curr.size;
+        for (int i = 0; i < elemsForCurr; ++i) {
+            curr.soArray(start++, (T) sorted[i]);
         }
+
+        var nodeArray = new Object[capacity];
+
+        int index = 0;
+        for (int i = elemsForCurr; i < succSize; ++i) {
+            nodeArray[index++] = sorted[i];
+        }
+
+        var newNode = new EliminationNode<>((T) sorted[elemsForCurr], nodeArray);
 
         succ.soMarked();
-        curr.increment(toMove);
-        node.increment(succSize - toMove);
-        node.spNext(succ.lpNext());
-        curr.soNext(node);
+
+        curr.increment(elemsForCurr);
+        newNode.increment(succSize - elemsForCurr);
+
+        newNode.spNext(succ.lpNext());
+        curr.soNext(newNode);
     }
 
-    static <T extends Comparable<T>> void findEmptyIndexes(int[] indexes, int arrayCap ,EliminationNode<T> node) {
-        int size = indexes.length;
-        for (int i = 0, j = 0; i < arrayCap; ++i) {
-            T t = node.lpArray(i);
-            if (t == null) {
-                if (j == size) return;
-                indexes[j++] = i;
-            }
-        }
-    }
 
-    static <T extends Comparable<T>>void fillValueIndexAndSize(T t, EliminationNode<T> curr, int arrayCap ,int[] indices, Operation op) {
-        indices[0] = -1;
-        indices[1] = 0;
-
-        for (int i = 0; i < arrayCap; ++i) {
+    static <T extends Comparable<T>> int findValueIndex(T t, EliminationNode<T> curr) {
+        for (int i = 0; i < curr.lpSize(); ++i) {
             T v = curr.lpArray(i);
-            if (v != null && t.compareTo(v) == 0) {
-                indices[0] = i;
-                if (op == Operation.ADD) return;
-                break;
-            }
+            if (v != null && t.compareTo(v) == 0) return i;
         }
 
-        indices[1] = curr.size(); //iterates the array
+        return -1;
     }
 
-    static <T extends Comparable<T>> void nullifyIndex(int index, int arrayCap ,EliminationNode<T> curr) {
-        var arr = curr.array;
-        int nnIndex = findNonNullIndex(arr, arrayCap ,index);
-        if (nnIndex != -1 && index < nnIndex) { //Array is logically empty
-            //We don't want to swap a value at a near index to a farther index.
-            // For example if the index we're removing is 6 and the next non-null index is 2, we don't want to swap it
-            //Here the set invariant is briefly violated though no reader thread will ever see duplicates
-            curr.spArray(index, curr.lpArray(nnIndex)); //Move the value at nnIndex forward first before nulling out
-            curr.soArray(nnIndex, null);
+
+    static <T extends Comparable<T>> void removeValueAtIndex(int index, int size , EliminationNode<T> curr) {
+        int replacement = size - 1;
+        if (index < replacement) { //Array is logically empty or we were the last value in the array
+            curr.soArray(index, curr.lpArray(replacement)); //Move the value at swapIndex forward first before nulling out
+            curr.spArray(replacement, null);
         } else {
             curr.soArray(index, null);
         }
+
     }
 
     static <T extends Comparable<T>>boolean isNotValid(EliminationNode<T> pred, EliminationNode<T> curr) {
         return pred.lpMarked() || curr.lpMarked() || pred.lpNext() != curr;
     }
 
-    static <T extends Comparable<T>>int findAvailableIndex(int arrayCap,  EliminationNode<T> node) {
-        for (int i = 0; i < arrayCap; ++i) {
-            if (node.lpArray(i) == null) {
-                return i;
-            }
-        }
-
-        return -1;
-    }
 
     static class LocalArrays<T extends Comparable<T>> {
         //Used for storing pred and curr arrays;
         final EliminationNode<T>[] nodes; //0 - pred, 1 - curr
         //Used for storing indices to prevent extra traversals to calculate size;
-        final int[] indices; // 0 - index, 1 - size
-        final EliminationMetrics metrics;
 
         public LocalArrays() {
             this.nodes = new EliminationNode[2];
-            this.indices = new int[2];
-            this.metrics = new EliminationMetrics();
         }
 
         public EliminationNode<T>[] nodes() {
             return nodes;
         }
 
-        public EliminationMetrics metrics() {
-            return metrics;
-        }
 
-        public int[] indices() {
-            return indices;
-        }
     }
 
 
     public static <T extends Comparable<T>> ThreadInfo<T> free() {
         return  (ThreadInfo<T>) FREE;
-    }
-
-
-    public EliminationMetrics metrics() {
-        return localArrays.get().metrics();
     }
 }

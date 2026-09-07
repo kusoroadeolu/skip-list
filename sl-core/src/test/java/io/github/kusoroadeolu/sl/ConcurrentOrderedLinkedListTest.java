@@ -14,7 +14,7 @@ class ConcurrentOrderedLinkedListTest {
     @Test
     void containsTest() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new ConcurrentOrderedList<Integer>();
+            var list = new ConcurrentOrderedSet<Integer>();
             Thread t1 = new Thread(() -> list.add(1));
             Thread t2 = new Thread(() -> list.add(2));
             Thread t3 = new Thread(() -> list.add(3));
@@ -39,7 +39,7 @@ class ConcurrentOrderedLinkedListTest {
     @Test
     void removeTest() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new ConcurrentOrderedList<Integer>();
+            var list = new ConcurrentOrderedSet<Integer>();
             Thread t1 = new Thread(() -> list.add(1));
             Thread t2 = new Thread(() -> list.add(2));
             Thread t3 = new Thread(() -> list.add(3));
@@ -65,7 +65,7 @@ class ConcurrentOrderedLinkedListTest {
     @Test
     void correctlyOrdered() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new ConcurrentOrderedList<Integer>();
+            var list = new ConcurrentOrderedSet<Integer>();
             Thread t1 = new Thread(() -> list.add(1));
             Thread t2 = new Thread(() -> list.add(2));
             Thread t3 = new Thread(() -> list.add(3));
@@ -90,7 +90,7 @@ class ConcurrentOrderedLinkedListTest {
     @Test
     void concurrentRemoves() {
         Lincheck.runConcurrentTest(() -> {
-            var list = new ConcurrentOrderedList<Integer>();
+            var list = new ConcurrentOrderedSet<Integer>();
 
             Thread t1 = new Thread(() -> {
                 list.add(1);

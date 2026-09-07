@@ -90,8 +90,8 @@ public class OptimisticSkipList<T extends Comparable<T>> implements ConcurrentCo
         return (int) CHL.getAcquire(this); //acquire
     }
 
-    int lopCurrentMaxLevel(){
-        return (int) CHL.getOpaque(this); //opaque
+    int loCurrentLevel(){
+        return (int) CHL.getAcquire(this); //opaque
     }
 
 
@@ -104,14 +104,15 @@ public class OptimisticSkipList<T extends Comparable<T>> implements ConcurrentCo
         Objects.requireNonNull(t);
         int ht = height;
         int maxLevel = generateLevel(ht);
-        int seenMaxLevel = lopCurrentMaxLevel(); // A delayed read is alright here
+        int seenMaxLevel = loCurrentLevel(); // A delayed read is alright here
         int h = Math.max(ht - 1, seenMaxLevel);  //If the max level is greater than seen max level, which just start from the height, otherwise we start from seen max level
         Node<T>[] preds = this.preds.get();
         Node<T>[] succs = this.succs.get();
         outer: while (true) {
-            int lFound = findNode(preds, succs, h ,t, Operation.ADD);
-            if (lFound != -1) { //If we actually found a node
-                Node<T> seen = succs[lFound];
+            int found = findNode(preds, succs, h ,t, Operation.ADD);
+
+            if (found != -1) { //If we actually found a node
+                Node<T> seen = succs[found];
                 var marked = seen.loMarked();
                 if (!marked) { //If not deleted
                     while (!seen.loFullyLinked()) Thread.onSpinWait(); //From my prev experience a spin wait over long periods of time could kill perf, we could park for 1 nanos here
@@ -227,7 +228,7 @@ public class OptimisticSkipList<T extends Comparable<T>> implements ConcurrentCo
     public boolean contains(Object t) {
         Node<T>[] preds = this.preds.get();
         Node<T>[] succs = this.succs.get();
-        int lFound = findNode(preds, succs, lopCurrentMaxLevel() , (T) t, Operation.CONTAINS); //A weaker read is alright here, compared to remove/add, where we need stronger visibility guarantees
+        int lFound = findNode(preds, succs, loCurrentLevel() , (T) t, Operation.CONTAINS); //A weaker read is alright here, compared to remove/add, where we need stronger visibility guarantees
         if (lFound == -1) return false;
         var node = succs[lFound];
         return node.loFullyLinked() && !node.loMarked();

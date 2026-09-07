@@ -15,11 +15,11 @@ public class UnrolledListStress {
     @Outcome(id = "1", expect = ACCEPTABLE, desc = "Invariant maintained")
     @State
     public static class OrderedAnchorStress {
-        public UnrolledConcurrentList<Integer> set;
+        public ConcurrentUnrolledSet<Integer> set;
         final int bound = 20;
 
         public OrderedAnchorStress() {
-            this.set = new UnrolledConcurrentList<>(4, 1);
+            this.set = new ConcurrentUnrolledSet<>(4, 1);
         }
 
 
@@ -68,10 +68,10 @@ public class UnrolledListStress {
     @Outcome(id = "1", expect = ACCEPTABLE, desc = "Invariant maintained")
     @State
     public static class AnchorInvariantStress {
-        public  UnrolledConcurrentList<Integer> set;
+        public ConcurrentUnrolledSet<Integer> set;
         final int bound = 20;
         public AnchorInvariantStress() {
-            this.set = new UnrolledConcurrentList<>(4, 1);
+            this.set = new ConcurrentUnrolledSet<>(4, 1);
         }
 
 

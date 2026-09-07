@@ -12,7 +12,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Sequential invariant tests for UnrolledConcurrentList.
+ * Sequential invariant tests for ConcurrentUnrolledSet.
  *
  * Invariants under test:
  *  I1 - Anchor ordering: each node's anchor > its predecessor's anchor
@@ -28,7 +28,7 @@ class UnrolledConcurrentListTest {
     /**
      * I1: anchors must be strictly ascending across the live node list.
      */
-    static <T extends Comparable<T>> void assertAnchorOrdering(UnrolledConcurrentList<T> list) {
+    static <T extends Comparable<T>> void assertAnchorOrdering(ConcurrentUnrolledSet<T> list) {
         List<T> anchors = list.anchorList();
         for (int i = 1; i < anchors.size(); i++) {
             T prev = anchors.get(i - 1);
@@ -41,7 +41,7 @@ class UnrolledConcurrentListTest {
     /**
      * I2: every key inside a node must be >= that node's anchor.
      */
-    static <T extends Comparable<T>> void assertKeyPlacement(UnrolledConcurrentList<T> list) {
+    static <T extends Comparable<T>> void assertKeyPlacement(ConcurrentUnrolledSet<T> list) {
         Map<T, List<T>> nodeMap = list.nodeMap();
         for (Map.Entry<T, List<T>> e : nodeMap.entrySet()) {
             T anchor = e.getKey();
@@ -57,11 +57,11 @@ class UnrolledConcurrentListTest {
      * We infer this from nodeMap() — the list size it returns is the non-null count.
      * We expose size via a thin accessor added below (see note).
      *
-     * Because UnrolledConcurrentList doesn't expose node.size directly through its
+     * Because ConcurrentUnrolledSet doesn't expose node.size directly through its
      * public API we verify the weaker property: nodeMap value list size == what
      * anchorList / nodeMap says (i.e. no phantom entries).
      */
-    static <T extends Comparable<T>> void assertNoDuplicatesWithinNode(UnrolledConcurrentList<T> list) {
+    static <T extends Comparable<T>> void assertNoDuplicatesWithinNode(ConcurrentUnrolledSet<T> list) {
         Map<T, List<T>> nodeMap = list.nodeMap();
         for (Map.Entry<T, List<T>> e : nodeMap.entrySet()) {
             List<T> keys = e.getValue();
@@ -75,7 +75,7 @@ class UnrolledConcurrentListTest {
     }
 
     /** Convenience — run all structural invariants in one call. */
-    static <T extends Comparable<T>> void assertAllInvariants(UnrolledConcurrentList<T> list) {
+    static <T extends Comparable<T>> void assertAllInvariants(ConcurrentUnrolledSet<T> list) {
         assertAnchorOrdering(list);
         assertKeyPlacement(list);
         assertNoDuplicatesWithinNode(list);
@@ -92,7 +92,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Adding same element twice returns false on second add")
         void addDuplicateReturnsFalse() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             assertTrue(list.add(42));
             assertFalse(list.add(42), "second add of same key should return false");
             assertAllInvariants(list);
@@ -101,7 +101,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Duplicate not physically stored twice in node")
         void duplicateNotStoredTwice() {
-            var list = new UnrolledConcurrentList<Integer>(8, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(8, 2);
             list.add(10);
             list.add(10);
             Map<Integer, List<Integer>> map = list.nodeMap();
@@ -114,7 +114,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Add-remove-readd is allowed and returns true")
         void addRemoveReadd() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             list.add(5);
             list.remove(5);
             assertTrue(list.add(5), "re-adding after remove should succeed");
@@ -134,7 +134,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Ascending inserts keep anchors ordered")
         void ascendingInserts() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             IntStream.rangeClosed(1, 20).forEach(list::add);
             assertAllInvariants(list);
         }
@@ -142,7 +142,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Descending inserts keep anchors ordered")
         void descendingInserts() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             IntStream.iterate(20, i -> i - 1).limit(20).forEach(list::add);
             assertAllInvariants(list);
         }
@@ -150,7 +150,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Random-order inserts keep anchors ordered")
         void randomInserts() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             List<Integer> vals = new ArrayList<>(IntStream.rangeClosed(1, 30).boxed().toList());
             Collections.shuffle(vals, new Random(0xDEADBEEF));
             vals.forEach(list::add);
@@ -162,7 +162,7 @@ class UnrolledConcurrentListTest {
         @ValueSource(ints = {2, 4, 8, 16})
         @DisplayName("Invariants hold across different array capacities")
         void differentCapacities(int cap) {
-            var list = new UnrolledConcurrentList<Integer>(cap, cap / 2);
+            var list = new ConcurrentUnrolledSet<Integer>(cap, cap / 2);
             IntStream.rangeClosed(1, cap * 3).forEach(list::add);
             assertAllInvariants(list);
         }
@@ -180,7 +180,7 @@ class UnrolledConcurrentListTest {
         @DisplayName("Splitting a full node produces two nodes with correct anchors")
         void splitProducesOrderedAnchors() {
             // cap=4 so adding 5 elements triggers a split
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             for (int i = 0; i < 5; i++) list.add(i);
 
             List<Integer> anchors = list.anchorList();
@@ -191,7 +191,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Keys land in the correct half after split")
         void keysInCorrectHalfAfterSplit() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             // Fill node then overflow to trigger split
             for (int i : new int[]{10, 20, 30, 40, 50}) list.add(i);
 
@@ -205,7 +205,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Multiple consecutive splits keep all keys reachable")
         void multiSplitKeyRetention() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             List<Integer> inserted = IntStream.rangeClosed(1, 40).boxed().toList();
             inserted.forEach(list::add);
             System.out.println(list.nodeMap());
@@ -228,7 +228,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Contains returns false for all removed keys")
         void containsFalseAfterRemove() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             List<Integer> vals = List.of(5, 10, 15, 20, 25, 30);
             vals.forEach(list::add);
             vals.forEach(list::remove);
@@ -250,7 +250,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Interleaved add/remove — surviving keys are reachable")
         void interleavedAddRemove() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             Set<Integer> alive = new HashSet<>();
 
             for (int i = 1; i <= 30; i++) {
@@ -276,14 +276,14 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Remove on empty list returns false without throwing")
         void removeFromEmpty() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             assertFalse(list.remove(99));
         }
 
         @Test
         @DisplayName("Remove non-existent key returns false")
         void removeNonExistent() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             list.add(1);
             list.add(2);
             assertFalse(list.remove(999));
@@ -293,14 +293,14 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Contains on empty list returns false")
         void containsOnEmpty() {
-            var list = new UnrolledConcurrentList<Integer>();
+            var list = new ConcurrentUnrolledSet<Integer>();
             assertFalse(list.contains(42));
         }
 
         @Test
         @DisplayName("Large mixed workload preserves all invariants")
         void largeMixedWorkload() {
-            var list = new UnrolledConcurrentList<Integer>(8, 3);
+            var list = new ConcurrentUnrolledSet<Integer>(8, 3);
             Random rng = new Random(42);
             Set<Integer> alive = new HashSet<>();
 
@@ -333,7 +333,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Merge keeps all surviving keys reachable")
         void mergeKeysReachable() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             // Fill two nodes, then drain the first below minFull to trigger merge
             for (int i = 1; i <= 8; i++) list.add(i);
             // Remove 3 of the first 4 elements → size drops to 1, below minFull=2
@@ -354,7 +354,7 @@ class UnrolledConcurrentListTest {
             // To trigger redistribute we need curr.size + succ.size >= arrayCap
             // Use cap=4, minFull=2. Fill to 8 → 2 nodes of 4. Remove 2 from first node → size=2=minFull,
             // succ.size=4, total=6 >= 4=arrayCap, so redistribute fires instead of merge.
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             for (int i = 1; i <= 8; i++) list.add(i);
             list.remove(1);
             list.remove(2);
@@ -373,7 +373,7 @@ class UnrolledConcurrentListTest {
         @Test
         @DisplayName("Merge when succ.size is zero crashes findEmptyIndexes")
         void mergeWithZeroSizedSucc() {
-            var list = new UnrolledConcurrentList<Integer>(4, 2);
+            var list = new ConcurrentUnrolledSet<Integer>(4, 2);
             // Build two nodes: [1,2,3,4] and [5,6,7,8]
             for (int i = 1; i <= 8; i++) list.add(i);
 
@@ -394,7 +394,7 @@ class UnrolledConcurrentListTest {
     class NullStress {
         @Test
         void testChurnedSplit() {
-            UnrolledConcurrentList<Integer> list = new UnrolledConcurrentList<>();
+            ConcurrentUnrolledSet<Integer> list = new ConcurrentUnrolledSet<>();
             Random rng = new Random(42);
 
             // Churn within a small key range to replicate benchmark conditions

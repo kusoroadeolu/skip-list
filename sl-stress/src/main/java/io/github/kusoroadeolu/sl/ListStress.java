@@ -19,7 +19,7 @@ public class ListStress {
         public final ConcurrentCollection<Integer> set;
 
         public UniqueInvariantStress() {
-            this.set = new ConcurrentOrderedList<>();
+            this.set = new ConcurrentOrderedSet<>();
         }
 
 
@@ -53,7 +53,7 @@ public class ListStress {
         public ConcurrentCollection<Integer> set;
 
         public AddRemoveTest() {
-            this.set = new ConcurrentOrderedList<>();
+            this.set = new ConcurrentOrderedSet<>();
             set.add(1);
             set.add(2);
             set.add(3);
@@ -85,7 +85,7 @@ public class ListStress {
         public final ConcurrentCollection<Integer> set;
 
         public RemoveInvariantStress() {
-            this.set = new ConcurrentOrderedList<>();
+            this.set = new ConcurrentOrderedSet<>();
         }
 
 
@@ -126,7 +126,7 @@ public class ListStress {
     @State
     public static class ConcurrentOrderedListStress {
 
-        private ConcurrentOrderedList<Integer> list = new ConcurrentOrderedList<>();
+        private ConcurrentOrderedSet<Integer> list = new ConcurrentOrderedSet<>();
 
         @Actor
         public void actor1() {
@@ -164,7 +164,7 @@ public class ListStress {
     @State
     public static class ConcurrentOrderedRandomListStress {
 
-        private ConcurrentOrderedList<Integer> set = new ConcurrentOrderedList<>();
+        private ConcurrentOrderedSet<Integer> set = new ConcurrentOrderedSet<>();
 
         @Actor
         public void actor1() {

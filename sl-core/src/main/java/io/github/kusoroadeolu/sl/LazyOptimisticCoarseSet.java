@@ -7,33 +7,27 @@ import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-// Based on the paper https://www.researchgate.net/publication/220440170_A_Lazy_Concurrent_List-Based_Set_Algorithm
-/* The code is quite easy to reason about
-* The main idea of the paper is we optimistically scan for a window where two nodes might operate before we acquire locks.
-* To propagate deletes before the actual unlinking happens, we lazily mark nodes as deleted, so threads waiting upon those nodes will validate and retry if needed
-* Read operations however are wait free, as threads need not acquire locks during traversal and visibility is ensured by happens before guarantee of locks
-*
-* A simple optimization made in this impl is validation the state of a node before acquiring the node locks
-* * */
 /**
  * @author kusoroadeolu
  * */
-public class LazySyncList<T extends Comparable<T>> implements ConcurrentCollection<T> {
-
+//So similar to the lazy optimistic list, but instead we just use a fat lock instead of a lock per node
+public class LazyOptimisticCoarseSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
     private final Node<T> left;
     private final Node<T> right;
+    private final Lock lock;
 
-    public LazySyncList() {
+    public LazyOptimisticCoarseSet() {
         this.left = new Node<>(null);
         this.right = new Node<>(null);
-        left.lock();
+        lock = new ReentrantLock();
+        lock.lock();
         try {
             left.soNext(right);
         }finally {
-            left.unlock();
+            lock.unlock();
         }
-
     }
+
 
     @Override
     public boolean add(T t) {
@@ -53,21 +47,16 @@ public class LazySyncList<T extends Comparable<T>> implements ConcurrentCollecti
             //A - B - C
             if (pred.loMarked() || curr.loMarked()) continue;
 
+            var lc = lock;
+            lc.lock();
             try {
-                pred.lock();
-                if (pred.lpMarked() || pred.lpNext() != curr) continue;
-                try {
-                    curr.lock();
-                    if (curr.lpMarked()) continue;
-                    Node<T> node = new Node<>(t);
-                    node.spNext(curr);
-                    pred.soNext(node); //Order here matters, we need to ensure node#next is set before we link pred to node. Set release ensures node write is visible
-                    return true;
-                }finally {
-                    curr.unlock();
-                }
+                if (pred.lpMarked() || curr.lpMarked() || pred.lpNext() != curr) continue;
+                Node<T> node = new Node<>(t);
+                node.spNext(curr);
+                pred.soNext(node); //Order here matters, we need to ensure node#next is set before we link pred to node. Set release ensures node write is visible
+                return true;
             } finally {
-                pred.unlock();
+                lc.unlock();
             }
         }
 
@@ -97,21 +86,16 @@ public class LazySyncList<T extends Comparable<T>> implements ConcurrentCollecti
 
             if (pred.loMarked()) continue;
 
+            var lc = lock;
             try {
-                pred.lock();
+                lc.lock();
                 if (pred.lpMarked() || pred.lpNext() != curr) continue; //Validate before trying to acquire curr lock
-                try {
-                    curr.lock();
-                    if (curr.lpMarked()) return false;
-
-                    pred.soNext(curr.lpNext());
-                    curr.soMarked();
-                    return true;
-                }finally {
-                    curr.unlock();
-                }
+                if (curr.lpMarked()) return false;
+                curr.soMarked();
+                pred.soNext(curr.lpNext()); //Order here matters, we need to ensure node#next is set before we link pred to node
+                return true;
             } finally {
-                pred.unlock();
+                lc.unlock();
             }
         }
     }
@@ -200,17 +184,11 @@ public class LazySyncList<T extends Comparable<T>> implements ConcurrentCollecti
             NEXT.set(this, node);
         }
 
+
         boolean lpMarked() {
             return (boolean) MARKED.get(this);
         }
 
-        void lock() {
-            lock.lock();
-        }
-
-        void unlock() {
-            lock.unlock();
-        }
     }
 
     private static final VarHandle NEXT;
@@ -219,10 +197,11 @@ public class LazySyncList<T extends Comparable<T>> implements ConcurrentCollecti
     static {
         var l = MethodHandles.lookup();
         try {
-            NEXT = l.findVarHandle(LazySyncList.Node.class, "next", Node.class);
-            MARKED = l.findVarHandle(LazySyncList.Node.class, "marked", boolean.class);
+            NEXT = l.findVarHandle(Node.class, "next", Node.class);
+            MARKED = l.findVarHandle(Node.class, "marked", boolean.class);
         }catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
     }
+
 }

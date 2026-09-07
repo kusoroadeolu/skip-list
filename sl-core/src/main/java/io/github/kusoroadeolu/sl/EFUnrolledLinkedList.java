@@ -4,18 +4,18 @@ import io.github.kusoroadeolu.sl.EFUnrolledConcurrentList.ThreadNode;
 
 import java.util.*;
 
-import static io.github.kusoroadeolu.sl.UnrolledConcurrentList.*;
+import static io.github.kusoroadeolu.sl.ConcurrentUnrolledSet.*;
 
 public class EFUnrolledLinkedList<T extends Comparable<T>> {
-    private final UnrolledConcurrentList.Node<T> left;
-    private final UnrolledConcurrentList.Node<T> right;
+    private final ConcurrentUnrolledSet.Node<T> left;
+    private final ConcurrentUnrolledSet.Node<T> right;
     private final int arrayCap;
     private final int minFull;
     private final int maxMerge;
 
     public EFUnrolledLinkedList(int arrCap, int minFull) {
-        this.left = new UnrolledConcurrentList.SentinelNode<>();
-        this.right = new UnrolledConcurrentList.SentinelNode<>();
+        this.left = new ConcurrentUnrolledSet.SentinelNode<>();
+        this.right = new ConcurrentUnrolledSet.SentinelNode<>();
         left.lock();
         try {
             left.next = right;
@@ -29,8 +29,8 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
     }
 
     boolean add(ThreadNode<T> tn, EFUnrolledConcurrentList.LocalValues<T> localValues) {
-        UnrolledConcurrentList.Node<T> l = left;
-        UnrolledConcurrentList.Node<T> r = right;
+        ConcurrentUnrolledSet.Node<T> l = left;
+        ConcurrentUnrolledSet.Node<T> r = right;
         T t = tn.value;
         int aCap = arrayCap;
         var nodes = localValues.nodes();
@@ -50,7 +50,7 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
                 }
 
                 if (curr == r || t.compareTo(curr.anchor) < 0) {
-                    UnrolledConcurrentList.Node<T> n = new UnrolledConcurrentList.Node<>(t, aCap);
+                    ConcurrentUnrolledSet.Node<T> n = new ConcurrentUnrolledSet.Node<>(t, aCap);
                     n.soArray(0, t);
                     n.spNext(curr);
                     pred.soNext(n);
@@ -135,8 +135,8 @@ public class EFUnrolledLinkedList<T extends Comparable<T>> {
     }
 
     boolean remove(ThreadNode<T> tn, EFUnrolledConcurrentList.LocalValues<T> localValues) {
-        UnrolledConcurrentList.Node<T> l = left;
-        UnrolledConcurrentList.Node<T> r = right;
+        ConcurrentUnrolledSet.Node<T> l = left;
+        ConcurrentUnrolledSet.Node<T> r = right;
         int aCap = arrayCap;
         var nodes = localValues.nodes();
         findNode(tn.value, l, r, nodes);

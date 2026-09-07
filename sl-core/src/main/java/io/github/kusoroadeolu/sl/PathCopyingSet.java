@@ -20,11 +20,11 @@ import java.util.List;
 * This structure maintains the set invariant
 *
 * */
-public class PCLinkedList<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class PathCopyingSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
 
     private volatile Node<T> head;
 
-    public PCLinkedList() {
+    public PathCopyingSet() {
         head = null;
     }
 
@@ -196,7 +196,7 @@ public class PCLinkedList<T extends Comparable<T>> implements ConcurrentCollecti
 
     static {
         try {
-            HEAD = MethodHandles.lookup().findVarHandle(PCLinkedList.class, "head", Node.class);
+            HEAD = MethodHandles.lookup().findVarHandle(PathCopyingSet.class, "head", Node.class);
         }catch (Exception e) {
             throw new RuntimeException(e);
         }

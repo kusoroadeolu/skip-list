@@ -5,9 +5,8 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
-import static io.github.kusoroadeolu.sl.EliminationUnrolledConcurrentList.free;
+import static io.github.kusoroadeolu.sl.ConcurrentEliminationUnrolledSet.free;
 
 
 public class EliminationNode<T extends Comparable<T>> {
@@ -24,21 +23,21 @@ public class EliminationNode<T extends Comparable<T>> {
     public EliminationNode(T anchor, int capacity) {
         this.anchor = anchor;
         this.array = new Object[capacity];
-        this.lock = new ReentrantLock();
+        this.lock = new SpinLock();
         arena = fillArena();
     }
 
     public EliminationNode(T anchor, int capacity, AtomicReferenceArray<ThreadInfo<T>> arena) {
         this.anchor = anchor;
         this.array = new Object[capacity];
-        this.lock = new ReentrantLock();
+        this.lock = new SpinLock();
         this.arena = arena;
     }
 
     public EliminationNode(Object[] initialArray) {
         this.anchor = (T) initialArray[0];
         this.array = initialArray;
-        this.lock = new ReentrantLock();
+        this.lock = new SpinLock();
         arena = fillArena();
 
     }
@@ -46,7 +45,7 @@ public class EliminationNode<T extends Comparable<T>> {
     public EliminationNode(T anchor, Object[] array) {
         this.anchor = anchor;
         this.array = array;
-        this.lock = new ReentrantLock();
+        this.lock = new SpinLock();
         arena = fillArena();
     }
 
@@ -86,8 +85,12 @@ public class EliminationNode<T extends Comparable<T>> {
         return (EliminationNode<T>) NEXT.get(this);
     }
 
-    boolean lvMarked(){
-        return (boolean) MARKED.getVolatile(this);
+    boolean loMarked(){
+        return (boolean) MARKED.getAcquire(this);
+    }
+
+    boolean lopMarked() {
+        return (boolean) MARKED.getOpaque(this);
     }
 
     boolean lpMarked(){
@@ -152,7 +155,11 @@ public class EliminationNode<T extends Comparable<T>> {
         }
     }
 
-    public record ThreadInfo<T> (T value, UnrolledConcurrentList.Operation op){}
+    public int lpSize() {
+        return (int) SIZE.get(this);
+    }
+
+    public record ThreadInfo<T> (T value, ConcurrentUnrolledSet.Operation op){}
 
     static class SentinelEliminationNode<T extends Comparable<T>> extends EliminationNode<T> {
         public SentinelEliminationNode() {

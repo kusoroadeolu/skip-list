@@ -4,7 +4,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /*
 * Based on the thesis https://utd-ir.tdl.org/server/api/core/bitstreams/ca02e64a-84c8-45c9-9cb2-721ead65df84/content
@@ -43,7 +42,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author kusoroadeolu
  * */
 @SuppressWarnings("unchecked")
-public class UnrolledConcurrentList<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class ConcurrentUnrolledSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
     private final Node<T> left;
     private final Node<T> right;
     private final ThreadLocal<LocalArrays<T>> localArrays;
@@ -53,11 +52,11 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
     private final int minFull;
     private final int mergeThreshold;
 
-    public UnrolledConcurrentList() {
+    public ConcurrentUnrolledSet() {
         this(64, 16);
     }
 
-    public UnrolledConcurrentList(int capacity, int minFull) {
+    public ConcurrentUnrolledSet(int capacity, int minFull) {
         this.left = new SentinelNode<>();
         this.right = new SentinelNode<>();
         left.lock();
@@ -232,11 +231,6 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
         return false;
     }
 
-    //Benchmark                                   (keySpaceSize)    (type)   Mode  Cnt        Score        Error  Units
-    //ZipfianBenchmark.eightyWriteTwentyRead              100000  UNROLLED  thrpt   20  6020456.620 ± 390577.874  ops/s
-    //ZipfianBenchmark.eightyWriteTwentyRead:jfr          100000  UNROLLED  thrpt               NaN                 ---
-
-
 
     static <T extends Comparable<T>> void findEmptyIndexes(int[] indexes, int arrayCap ,Node<T> node) {
         int size = indexes.length;
@@ -249,17 +243,17 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
         }
     }
 
-    static <T extends Comparable<T>>void split(int arrayCap ,T t ,Node<T>[] nodes) {
-        int len = arrayCap + 1;
+    static <T extends Comparable<T>>void split(int capacity ,T t ,Node<T>[] nodes) {
+        int len = capacity + 1;
 
         Object[] copy = Arrays.copyOf(nodes[1].array, len); //Copy to prevent modifying the initial array
-        copy[arrayCap] = t;
+        copy[capacity] = t;
 
         Arrays.sort(copy);
-        Object[] arr1 = new Object[arrayCap];
-        Object[] arr2 = new Object[arrayCap];
+        Object[] arr1 = new Object[capacity];
+        Object[] arr2 = new Object[capacity];
 
-        int half = len / 2;
+        int half = len >>> 1;
         int rem = len - half;
         System.arraycopy(copy, 0, arr1, 0, half);
         System.arraycopy(copy, half, arr2, 0, rem);
@@ -273,16 +267,7 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
         nodes[1] = n2;
     }
 
-    static int findNonNullIndex(Object[] arr, int arrayCap ,int index) {
-        for (int i = 0; i < arrayCap; ++i) {
-            if (i != index && arr[i] != null) return i;
-        }
-
-        return -1;
-    }
-
     static <T extends Comparable<T>>void merge(Node<T> curr, Node<T> succ ,int totalSize) {
-
         int j = 0;
         for (int i = curr.size(); i < totalSize; ++i) {
             curr.soArray(i, succ.lpArray(j++));
@@ -451,7 +436,6 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
     //Indice 0 -> index of value, Indice 1 -> size
     //Only accessed when a lock is held
     static <T extends Comparable<T>> int findValueIndex(T t, Node<T> curr) {
-
         for (int i = 0; i < curr.lpSize(); ++i) {
             T v = curr.lpArray(i);
             if (v != null && t.compareTo(v) == 0) return i;
@@ -473,20 +457,20 @@ public class UnrolledConcurrentList<T extends Comparable<T>> implements Concurre
         public Node(T anchor, int capacity) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
         }
 
         public Node(Object[] initialArray) {
             this.anchor = (T) initialArray[0];
             this.array = initialArray;
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
 
         }
 
         public Node(T anchor, Object[] array) {
             this.anchor = anchor;
             this.array = array;
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
         }
 
         void lock() {

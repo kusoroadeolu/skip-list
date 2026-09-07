@@ -5,11 +5,9 @@ import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
+import static io.github.kusoroadeolu.sl.ConcurrentUnrolledSet.Operation;
 import static io.github.kusoroadeolu.sl.EliminationNode.NCPU;
-import static io.github.kusoroadeolu.sl.UnrolledConcurrentList.Operation;
-import static io.github.kusoroadeolu.sl.UnrolledConcurrentList.filterNulls;
 
 /*
 * An improved variant of the EF Unrolled Concurrent List. The main issue with the previous version was:
@@ -37,7 +35,7 @@ import static io.github.kusoroadeolu.sl.UnrolledConcurrentList.filterNulls;
 /**
  * @author kusoroadeolu
  * */
-public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
 
     private final LocalEFNode<T> left;
     private final LocalEFNode<T> right;
@@ -50,11 +48,11 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
     private static final int ARENA_LEN = NCPU;
     private static final int ARENA_MASK = ARENA_LEN - 1;
 
-    public LocalEFUnrolledConcurrentList() {
+    public ConcurrentEFUnrolledSet() {
         this(64, 16);
     }
 
-    public LocalEFUnrolledConcurrentList(int arrCap, int minFull) {
+    public ConcurrentEFUnrolledSet(int arrCap, int minFull) {
         this.left = new SentinelEFNode<>();
         this.right = new SentinelEFNode<>();
         left.lock(); //Visibility guarantees for plain reads under the lock
@@ -76,14 +74,19 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         LocalEFNode<T> l = left;
         LocalEFNode<T> r = right;
         int aCap = arrayCap;
-        var la = localArrays.get();
-        var nodes = la.nodes();
+        var localArrays = this.localArrays.get();
+        var nodes = localArrays.nodes();
         CombiningRequest<T> ours = null;
         for (;;) {
             findNode(value, l, r, nodes);
             var pred = nodes[0];
             var curr = nodes[1];
+
+            if (curr.loMarked() || pred.lopMarked()) continue;
+
             if (curr.contains(value)) return false;
+
+
             //true, hold the lock(because we are dont actually belong in this node),
             //boolean held;
             // otherwise try or await exchange
@@ -109,17 +112,16 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                     matchedValues.add(value);
                     scanAndMatchAdd(matchedValues, nodes);
 
-                    List<T> matchedList = new ArrayList<>(matchedValues);
                     int matchedSize = matchedValues.size();
                     int size = curr.size();
                     int newSize = size + matchedSize;
 
                     if (newSize <= aCap) {
-                        for (int i = 0, idx = 0; idx < matchedSize; ++i) {
-                            if (curr.lpArray(i) == null) {
-                                curr.soArray(i, matchedList.get(idx++));
-                            }
+                        int i = size;
+                        for (T t: matchedValues) {
+                            curr.soArray(i++, t);
                         }
+
                         curr.increment(matchedSize);
                         return true;
                     } else { //Split
@@ -127,23 +129,15 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                         // So we have a consistent view of curr.next from when we start the split operation
                         try {
                             var succ = curr.lpNext();
-                            var arr = curr.array;
-                            split(arr, matchedList ,newSize ,nodes);
+                            split(matchedValues ,newSize ,nodes);
                             var n1 = nodes[0];
                             var n2 = nodes[1];
 
                             curr.soMarked();
+
                             n1.spNext(n2);
                             n2.spNext(succ);
                             pred.soNext(n1); //Linearization point, makes n1 and n2 visible
-
-
-//                            boolean invariant = (pred == left || n1.anchor.compareTo(pred.anchor) >= 0)  &&
-//                                    (n2.anchor.compareTo(n1.anchor) >= 0) &&
-//                                    (succ == right || succ.anchor.compareTo(n2.anchor) >= 0);
-//                            if (!invariant) {
-//                                throw new RuntimeException("Pred: %s, N1: %s, N2: %s, Succ: %s".formatted(pred, n1, n2, succ));
-//                            }
                             return true;
                         }finally {
                             curr.unlock();
@@ -157,20 +151,12 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                  //We want to publish then wait
                 if (ours == null) ours = new CombiningRequest<>(Operation.ADD,  value);
 
-                if (belongsToNode) ++la.nodeExists;
-                else ++la.nodeDoesntExist;
-
                 if (nodes[1] != r && awaitExchange(ours, nodes, curr.arena, (int) Thread.currentThread().threadId())) {
                     Boolean status = awaitStatus(ours);
                     if (status != null) return status;
                 }
             }
         }
-    }
-
-    void assertInvariants(LocalEFNode<T> pred, LocalEFNode<T> node, LocalEFNode<T> curr) {
-        boolean invariant = (pred == left || node.anchor.compareTo(pred.anchor) >= 0) && (curr == right || node.anchor.compareTo(curr.anchor) < 0);
-        if (!invariant) throw new RuntimeException("Error on initial add");
     }
 
     boolean belongsToNode(LocalEFNode<T> r, LocalEFNode<T> curr, T value) {
@@ -182,7 +168,7 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         T t = (T) Objects.requireNonNull(o);
         LocalEFNode<T> l = left;
         LocalEFNode<T> r = right;
-        int aCap = arrayCap;
+        int capacity = arrayCap;
         var la = localArrays.get();
         var nodes = la.nodes();
         CombiningRequest<T> ours = null;
@@ -191,6 +177,9 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
             findNode(t, l, r, nodes);
             var pred = nodes[0];
             var curr = nodes[1];
+
+            if (curr.loMarked() || pred.lopMarked()) continue;
+
             if (!curr.contains(t)) return false;
             boolean belongsToNode = belongsToNode(r, curr, t);
 
@@ -206,8 +195,7 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                     valuesToBeRemoved.put(t, ours);
                     scanAndMatchRemove(valuesToBeRemoved, nodes);
 
-                    int removeCount = removeValues(valuesToBeRemoved, curr ,size, aCap);
-                    curr.decrement(removeCount);
+                    int removeCount = removeValues(valuesToBeRemoved, curr ,size, capacity);
                     int currSize = size - removeCount;
 
                     if (currSize > minFull) return true;
@@ -226,12 +214,10 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                         try {
                             int succSize = succ.size();
                             int total = currSize + succSize;
-                            int[] emptyIndexes = new int[succSize];
-                            findEmptyIndexes(emptyIndexes, aCap ,curr);
                             if (total <= maxMerge) { // Merge to fill the lower indices
-                                merge(curr, succ, aCap ,emptyIndexes);
+                                merge(curr, succ, total);
                             } else { //Redistribute so the lower index is not sparse
-                                redistribute(curr, succ, succSize, aCap ,total);
+                                redistribute(curr, succ, capacity ,total);
                             }
 
                             return true;
@@ -354,12 +340,12 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         return pred.lpMarked() || curr.lpMarked() || pred.lpNext() != curr;
     }
 
-    void split(Object[] array, List<T> matchedValues, int newSize, LocalEFNode<T>[] nodes) {
+    void split(Set<T> matchedValues, int newSize, LocalEFNode<T>[] nodes) {
         Object[] copy = new Object[newSize];
-        int idx = 0;
-        for (Object o : array) {
-            if(o != null) copy[idx++] = o;
-        }
+        int size = nodes[1].lpSize();
+        System.arraycopy(nodes[1].array, 0, copy, 0, size);
+
+        int idx = size;
 
         for (T h : matchedValues) {
             copy[idx++] = h;
@@ -369,12 +355,13 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         Object[] arr1 = new Object[arrayCap];
         Object[] arr2 = new Object[arrayCap];
 
-        int half = newSize / 2;
+        int half = newSize >>> 1;
         int rem = newSize - half;
         System.arraycopy(copy, 0, arr1, 0, half);
         System.arraycopy(copy, half, arr2, 0, rem);
         var n1 = new LocalEFNode<T>(arr1);
         var n2 = new LocalEFNode<T>(arr2);
+
         n1.increment(half);
         n2.increment(rem);
 
@@ -382,20 +369,17 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         nodes[1] = n2;
     }
 
-    static <T extends Comparable<T>>void merge(LocalEFNode<T> curr, LocalEFNode<T> succ, int arrayCap ,int[] indexes) {
-        for (int i = 0, j = 0; i < arrayCap; ++i) {
-            T t = succ.lpArray(i);
-            if (t != null) {
-                var idx = indexes[j++];
-                curr.soArray(idx, t);
-
-            }
+    static <T extends Comparable<T>>void merge(LocalEFNode<T> curr, LocalEFNode<T> succ, int totalSize) {
+        int j = 0;
+        for (int i = curr.size(); i < totalSize; ++i) {
+            curr.soArray(i, succ.lpArray(j++));
         }
 
         succ.soMarked();
 
         curr.increment(succ.size());
-        curr.soNext(succ.lpNext());
+        curr.soNext(succ.lpNext()); //Plain read for succ as we already hold its lock
+
 
     }
 
@@ -437,7 +421,7 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         do {
             findNode(t, l, r ,nodes);
             curr = nodes[1];
-        } while (curr.lvMarked());
+        } while (curr.loMarked());
 
         if (curr == r || curr.anchor.compareTo(t) > 0) return false;
 
@@ -468,13 +452,17 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         for (int i = 0; size > 0 && i < arrayCap; ++i) {
             var value = curr.lpArray(i);
             CombiningRequest<T> current = null;
-            if (value != null && (current =  valuesToRemove.remove(value)) != null) {
+            if (value != null && (current = valuesToRemove.remove(value)) != null) {
                 //remove from the map as we will rescan to mark unseen values as failed
-                curr.soArray(i, null);
+                var elem = curr.lpArray(--size);
+                curr.soArray(i, elem);
+                curr.spArray(size, null);
                 current.soStatus(Status.SUCCESS);
                 ++removed;
             }
         }
+
+        curr.size = size;
 
         for (var entry : valuesToRemove.entrySet()) {
             entry.getValue().soStatus(Status.FAIL);
@@ -534,26 +522,37 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
     private static final Object FREE = null;
 
 
-    static <T extends Comparable<T>>void redistribute(LocalEFNode<T> curr, LocalEFNode<T> succ, int succSize, int arrayCap ,int total) {
-        Object[] copy = filterNulls(succ.array, succSize);
-        int nodeCount = total / 2;
-        int toMove = succSize - nodeCount;
-        Arrays.sort(copy);
-        var nodeArr = Arrays.copyOf(copy, arrayCap);
-        var node = new LocalEFNode<>((T) nodeArr[toMove], nodeArr);
-        for (int i = 0, j = 0; i < arrayCap; ++i) {
-            if (j == toMove) break;
-            if (curr.lpArray(i) == null) {
-                curr.soArray(i, (T) nodeArr[j]);
-                nodeArr[j++] = null;
-            }
+    static <T extends Comparable<T>>void redistribute(LocalEFNode<T> curr, LocalEFNode<T> succ, int capacity ,int totalSize) {
+        int succSize = succ.size();
+        Object[] sorted = new Object[succSize];
+        System.arraycopy(succ.array, 0, sorted, 0, succSize);
+        Arrays.sort(sorted);
+
+        int elemPerNode = totalSize >>> 1;
+        int elemsForCurr = Math.max(0, succSize - elemPerNode);
+
+
+        int start = curr.size;
+        for (int i = 0; i < elemsForCurr; ++i) {
+            curr.soArray(start++, (T) sorted[i]);
         }
 
+        var nodeArray = new Object[capacity];
+
+        int index = 0;
+        for (int i = elemsForCurr; i < succSize; ++i) {
+            nodeArray[index++] = sorted[i];
+        }
+
+        var newNode = new LocalEFNode<>((T) sorted[elemsForCurr], nodeArray);
+
         succ.soMarked();
-        curr.increment(toMove);
-        node.increment(succSize - toMove);
-        node.spNext(succ.lpNext());
-        curr.soNext(node);
+
+        curr.increment(elemsForCurr);
+        newNode.increment(succSize - elemsForCurr);
+
+        newNode.spNext(succ.lpNext());
+        curr.soNext(newNode);
     }
 
     @Override
@@ -567,12 +566,12 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
     }
 
     static class CombiningRequest<T extends Comparable<T>> {
-        final UnrolledConcurrentList.Operation operation;
+        final ConcurrentUnrolledSet.Operation operation;
         final T value;
         LocalEFNode<T> pred, curr; //Will be backed by ordered write to array index
         volatile Status status;
 
-        public CombiningRequest(UnrolledConcurrentList.Operation operation, T value) {
+        public CombiningRequest(ConcurrentUnrolledSet.Operation operation, T value) {
             this.operation = operation;
             this.value = value;
         }
@@ -612,21 +611,21 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         public final T anchor;
         public final Object[] array;
         final Lock lock;
-        int size;
+        volatile int size;
         volatile boolean marked;
         volatile LocalEFNode<T> next;
 
         public LocalEFNode(T anchor, int capacity) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
             arena = fillArena();
         }
 
         public LocalEFNode(T anchor, int capacity, AtomicReferenceArray<CombiningRequest<T>> arena) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
             this.arena = arena;
         }
 
@@ -634,14 +633,14 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         public LocalEFNode(Object[] initialArray) {
             this.anchor = (T) initialArray[0];
             this.array = initialArray;
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
             arena = fillArena();
         }
 
         public LocalEFNode(T anchor, Object[] array) {
             this.anchor = anchor;
             this.array = array;
-            this.lock = new ReentrantLock();
+            this.lock = new SpinLock();
             arena = fillArena();
         }
 
@@ -681,8 +680,12 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
             return (LocalEFNode<T>) NEXT.get(this);
         }
 
-        boolean lvMarked(){
+        boolean loMarked(){
             return (boolean) MARKED.getAcquire(this);
+        }
+
+        boolean lopMarked() {
+            return (boolean) MARKED.getOpaque(this);
         }
 
         boolean lpMarked(){
@@ -751,6 +754,10 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
                     "anchor=" + anchor +
                     ", array=" + Arrays.toString(array);
         }
+
+        public int lpSize() {
+            return (int) SIZE.get(this);
+        }
     }
 
 
@@ -769,23 +776,18 @@ public class LocalEFUnrolledConcurrentList<T extends Comparable<T>> implements C
         //Used for storing pred and curr arrays;
         final LocalEFNode<T>[] nodes; //0 - pred, 1 - curr
         //Used for storing indices to prevent extra traversals to calculate size;
-        final int[] indices; // 0 - index, 1 - size
 
         int nodeExists;
         int nodeDoesntExist;
 
         public LocalArrays() {
             this.nodes = new LocalEFNode[2];
-            this.indices = new int[2];
         }
 
         public LocalEFNode<T>[] nodes() {
             return nodes;
         }
 
-        public int[] indices() {
-            return indices;
-        }
     }
 
     private static final VarHandle MARKED;

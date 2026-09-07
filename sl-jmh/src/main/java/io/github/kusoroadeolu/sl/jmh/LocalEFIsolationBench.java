@@ -1,7 +1,7 @@
 package io.github.kusoroadeolu.sl.jmh;
 
 import io.github.kusoroadeolu.sl.ConcurrentCollection;
-import io.github.kusoroadeolu.sl.LocalEFUnrolledConcurrentList;
+import io.github.kusoroadeolu.sl.ConcurrentEFUnrolledSet;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.RunnerException;
@@ -25,7 +25,7 @@ public class LocalEFIsolationBench {
     @Param({"LOCAL_EF"})
     private String type;
 
-    private LocalEFUnrolledConcurrentList<Integer> set;
+    private ConcurrentEFUnrolledSet<Integer> set;
     private ZipfianGenerator zipf;
 
     @State(Scope.Thread)
@@ -56,7 +56,7 @@ public class LocalEFIsolationBench {
     @Setup(Level.Trial)
     public void setup() {
         set = switch (type) {
-            case "LOCAL_EF" -> new LocalEFUnrolledConcurrentList<>();
+            case "LOCAL_EF" -> new ConcurrentEFUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
         zipf      = new ZipfianGenerator(keySpaceSize, 2.0);

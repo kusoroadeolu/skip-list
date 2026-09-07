@@ -1,7 +1,6 @@
 package io.github.kusoroadeolu.sl.jmh;
 
 import io.github.kusoroadeolu.sl.*;
-import io.github.kusoroadeolu.sl.jmh.SkipListBench.JDKConcurrentSkipList;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.JavaFlightRecorderProfiler;
@@ -58,24 +57,20 @@ Generated with JMHPretty
 @Fork(value = 3, jvmArgs = {"-Xmx8g", "-Xms8g"})
 public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
     private ConcurrentCollection<Integer> set;
-    @Param({"UNROLLED"})
-    //@Param({"LF_FR","UNROLLED", "JDK" ,"PC_LS", "ELIM_UNROLLED", "LAZY", "LAZY_COARSE", "LOCK", "LOCAL_EF"})
+    @Param({"LockFreeSet", "UnrolledSet" ,"PathCopyingSet", "EliminationUnrolledSet", "LazyOptimisticSet", "LazyCoarseOptimisticSet", "LockedSet", "EliminationCombiningUnrolledSet"})
     private String type;
 
     @Setup
     public void setup() {
         set = switch (type) {
-            case "LF_FR" -> new ConcurrentOrderedList<>();
-            case "ELIM_UNROLLED" -> new EliminationUnrolledConcurrentList<>();
-            case "LAZY" -> new LazySyncList<>();
-            case "LAZY_COARSE" -> new LazyCoarseSyncList<>();
-            case "LOCK" -> new LockedOrderedLL<>();
-            case "UNROLLED" -> new UnrolledConcurrentList<>();
-          //  case "EF_UNROLLED" -> new EFUnrolledConcurrentList<>();
-            case "LOCAL_EF" -> new LocalEFUnrolledConcurrentList<>();
-            case "PC_LS" -> new PCLinkedList<>();
-            case "JDK" -> new JDKConcurrentSkipList<>();
-
+            case "LockFreeSet" -> new ConcurrentOrderedSet<>();
+            case "UnrolledSet" -> new ConcurrentUnrolledSet<>();
+            case "PathCopyingSet" -> new PathCopyingSet<>();
+            case "EliminationUnrolledSet" -> new ConcurrentEliminationUnrolledSet<>();
+            case "LazyOptimisticSet" -> new LazyOptimisticSet<>();
+            case "LazyCoarseOptimisticSet" -> new LazyOptimisticCoarseSet<>();
+            case "LockedSet" -> new LockedOrderedSet<>();
+            case "EliminationCombiningUnrolledSet" -> new ConcurrentEFUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
 
@@ -109,36 +104,3 @@ public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
             new org.openjdk.jmh.runner.Runner(options).run();        }
     }
 }
-
-/*
-* With cache
-* green = fastest/best, red = slowest/worst
-
-╭ io.github.kusoroadeolu.sl.jmh.ListWriteHeavyBench.eightThreads ─╮
-│  Type     Score     Error      Unit                             │
-│  -------- --------- ---------- -----                            │
-│  UNROLLED 28286.922 ± 2380.826 ops/s                            │
-╰─────────────────────────────────────────────────────────────────╯
-*
-╭ io.github.kusoroadeolu.sl.jmh.ListReadHeavyBench.eightThreads ─╮
-│  Type     Score     Error      Unit                            │
-│  -------- --------- ---------- -----                           │
-│  UNROLLED 87781.691 ± 8792.279 ops/s                           │
-╰────────────────────────────────────────────────────────────────╯
-
-* */
-
-/*
-╭ io.github.kusoroadeolu.sl.jmh.ListReadHeavyBench.eightThreads ─╮
-│  Type     Score      Error      Unit                           │
-│  -------- ---------- ---------- -----                          │
-│  UNROLLED 102013.837 ± 7435.288 ops/s                          │
-╰────────────────────────────────────────────────────────────────╯
-
-╭ io.github.kusoroadeolu.sl.jmh.ListWriteHeavyBench.eightThreads ─╮
-│  Type     Score     Error      Unit                             │
-│  -------- --------- ---------- -----                            │
-│  UNROLLED 29008.614 ± 2429.061 ops/s                            │
-╰─────────────────────────────────────────────────────────────────╯
-
-* */

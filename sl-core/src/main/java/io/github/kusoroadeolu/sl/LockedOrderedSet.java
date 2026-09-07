@@ -8,13 +8,13 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * @author kusoroadeolu
  * */
-public class LockedOrderedLL<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class LockedOrderedSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
     private final Node<T> left;
     private final Node<T> right;
     private int size;
     private final Lock lock;
 
-    public LockedOrderedLL() {
+    public LockedOrderedSet() {
         this.left = new Node<>(null);
         this.right = new Node<>(null);
         this.lock = new ReentrantLock();

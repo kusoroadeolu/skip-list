@@ -27,11 +27,11 @@ This also allows for helping, a thread which encounters a deleted node, can help
 /**
  * @author kusoroadeolu
  * */
-public class ConcurrentOrderedList<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class ConcurrentOrderedSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
     private final Node<T> left;
     private final Node<T> right;
 
-    public ConcurrentOrderedList() {
+    public ConcurrentOrderedSet() {
         this.left = new LeftNode<>();
         this.right = new RightNode<>();
         left.next = right;
