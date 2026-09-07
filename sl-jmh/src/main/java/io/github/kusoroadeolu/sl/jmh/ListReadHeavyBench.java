@@ -8,6 +8,8 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -39,16 +41,19 @@ Generated with JMHPretty
 * */
 
 @BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.MICROSECONDS)
+@OutputTimeUnit(TimeUnit.SECONDS)
 @State(Scope.Benchmark)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
-@Fork(3)
+@Fork(value = 3, jvmArgs = {"-Xmx8g", "-Xms8g"})
 public class ListReadHeavyBench {
     private ConcurrentCollection<Integer> set;
 
-    @Param({"LF_FR", "PC_LS", "LAZY", "LAZY_COARSE", "LOCK", "UNROLLED"})
+    @Param({"UNROLLED"})
     private String type;
+
+    static final int PREFILL = 5_00_000;
+    static final int RANGE = 6_000_000;
 
     @Setup
     public void setup() {
@@ -62,12 +67,15 @@ public class ListReadHeavyBench {
             default -> throw new IllegalArgumentException();
         };
 
+        Set<Integer> set = new HashSet<>();
+        for (int i = 0; i < PREFILL;) {
+            int value = ThreadLocalRandom.current().nextInt(0, RANGE);
+            boolean added = set.add(value);
+            if(added) set.add(value);
+            ++i;
+        }
     }
 
-    @TearDown
-    public void teardown() {
-        set.clear();
-    }
 
 
     @Threads(8)
@@ -79,7 +87,7 @@ public class ListReadHeavyBench {
 
 
     private void doWork(Blackhole bh) {
-        int key = ThreadLocalRandom.current().nextInt(10_000);
+        int key = ThreadLocalRandom.current().nextInt(0, RANGE);
         int op = ThreadLocalRandom.current().nextInt(100);
 
         if (op < 90) {

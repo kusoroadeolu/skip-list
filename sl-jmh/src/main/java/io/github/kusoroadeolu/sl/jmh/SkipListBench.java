@@ -137,6 +137,11 @@ public class SkipListBench {
         }
 
         @Override
+        public void clear() {
+            set.clear();
+        }
+
+        @Override
         public int size() {
             return set.size();
         }

@@ -7,12 +7,14 @@ import io.github.kusoroadeolu.sl.UnrolledConcurrentList;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.profile.JavaFlightRecorderProfiler;
-import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.SplittableRandom;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 
@@ -80,20 +82,20 @@ ElimUnrolledZipfianBenchmark.fullWrite             256  UNROLLED  thrpt   30  1.
 * and tell threads which don't belong to that specific node to retry (which in retrospect now doesnt make sense, since threads
 * backoff and we still hold the lock to the node they need to create a new node to)
 * */
-@BenchmarkMode(Mode.SampleTime)
-@OutputTimeUnit(TimeUnit.MICROSECONDS)
+@BenchmarkMode(Mode.Throughput)
+@OutputTimeUnit(TimeUnit.SECONDS)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
-@Fork(value = 1, jvmArgs = "-XX:TieredStopAtLevel=1")
+//@Fork(value = 2, jvmArgs = "-XX:TieredStopAtLevel=1")
 @State(Scope.Benchmark)
 @Threads(8)
-
+@Fork(value = 2, jvmArgs = {"-Xmx8g", "-Xms8g"})
 public class ZipfianBenchmark {
 
-    @Param({"128", "256", "512"})
+    @Param({"100000"})
     int keySpaceSize;
 
-    @Param({"UNROLLED", "ELIM_UNROLLED", "LOCAL_EF"})
+    @Param({"UNROLLED"})
     private String type;
 
     private ConcurrentCollection<Integer> set;
@@ -120,10 +122,6 @@ public class ZipfianBenchmark {
 //        }
     }
 
-    @TearDown
-    public void teardown() {
-        set.clear();
-    }
 
     @Setup(Level.Trial)
     public void setup() {
@@ -134,17 +132,31 @@ public class ZipfianBenchmark {
             default -> throw new IllegalArgumentException();
         };
         zipf      = new ZipfianGenerator(keySpaceSize, 2.0);
+        int prefill = (int) (0.1 * keySpaceSize);
+
+        Set<Integer> added = new HashSet<>();
+        for (int i = 0; i < prefill;) {
+            int val = ThreadLocalRandom.current().nextInt(0, keySpaceSize);
+            if (!added.add(val)) continue;
+            set.add(val);
+            ++i;
+        }
     }
 
 
-//    @Benchmark
-//    public void eightyWriteTwentyRead(ThreadState ts, Blackhole bh) {
-//        op(set, ts, bh);
-//    }
+    @Benchmark
+    public void eightyWriteTwentyRead(ThreadState ts, Blackhole bh) {
+        op(set, ts, bh);
+    }
 
     @Benchmark
     public void fullWrite(ThreadState ts, Blackhole bh) {
         fullWrite(set, ts, bh);
+    }
+//
+    @Benchmark
+    public void tenWriteNinetyRead(ThreadState ts, Blackhole bh) {
+       read(set, ts, bh);
     }
 
 
@@ -153,6 +165,16 @@ public class ZipfianBenchmark {
     private void op(ConcurrentCollection<Integer> set, ThreadState ts, Blackhole bh) {
         int key = zipf.nextInt(ts.rng);
         if (ts.rng.nextDouble() < 0.80) {
+            if (ts.rng.nextBoolean()) bh.consume(set.add(key));
+            else bh.consume(set.remove(key));
+        } else {
+            bh.consume(set.contains(key));
+        }
+    }
+
+    private void read(ConcurrentCollection<Integer> set, ThreadState ts, Blackhole bh) {
+        int key = zipf.nextInt(ts.rng);
+        if (ts.rng.nextDouble() < 0.10) {
             if (ts.rng.nextBoolean()) bh.consume(set.add(key));
             else bh.consume(set.remove(key));
         } else {
