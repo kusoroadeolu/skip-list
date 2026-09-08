@@ -109,7 +109,7 @@ public class ZipfianBenchmark {
             case "LazyOptimisticSet" -> new LazyOptimisticSet<>();
             case "LazyCoarseOptimisticSet" -> new LazyOptimisticCoarseSet<>();
             case "LockedSet" -> new LockedOrderedSet<>();
-            case "EliminationCombiningUnrolledSet" -> new ConcurrentEFUnrolledSet<>();
+            case "EliminationCombiningUnrolledSet" -> new ConcurrentCombiningUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
 
@@ -212,25 +212,25 @@ public class ZipfianBenchmark {
 │  KeySpaceSize Type                            Score      Error       Unit   │
 │  ------------ ------------------------------- ---------- ----------- -----  │
 │  500000       LockFreeSet                     34068.440  ± 4369.103  ops/s  │
-│  500000       UnrolledSet                     563629.150 ± 38712.681 ops/s  │
+│  500000       UnrolledSet                     549576.051 ± 26394.525 ops/s  │
 │  500000       PathCopyingSet                  9374.403   ± 10591.912 ops/s  │
-│  500000       EliminationUnrolledSet          523306.749 ± 32137.263 ops/s  │
+│  500000       EliminationUnrolledSet          524242.316 ± 27137.899 ops/s  │
 │  500000       LazyOptimisticSet               28836.718  ± 4146.438  ops/s  │
 │  500000       LazyCoarseOptimisticSet         28646.652  ± 4831.145  ops/s  │
 │  500000       LockedSet                       12356.971  ± 831.821   ops/s  │
-│  500000       EliminationCombiningUnrolledSet 697961.675 ± 95710.645 ops/s  │
+│  500000       EliminationCombiningUnrolledSet 790340.528 ± 72509.061 ops/s  │
 ╰─────────────────────────────────────────────────────────────────────────────╯
 
 ╭───── io.github.kusoroadeolu.sl.jmh.ZipfianBenchmark.tenWriteNinetyRead ──────╮
 │  KeySpaceSize Type                            Score      Error        Unit   │
 │  ------------ ------------------------------- ---------- ------------ -----  │
 │  500000       LockFreeSet                     74551.459  ± 6677.074   ops/s  │
-│  500000       UnrolledSet                     994164.503 ± 100797.594 ops/s  │
+│  500000       UnrolledSet                     1049847.911 ± 84527.109 ops/s  │
 │  500000       PathCopyingSet                  54073.445  ± 6048.876   ops/s  │
-│  500000       EliminationUnrolledSet          963745.999 ± 83210.464  ops/s  │
+│  500000       EliminationUnrolledSet          941411.407  ± 61612.742 ops/s  │
 │  500000       LazyOptimisticSet               67275.228  ± 4930.614   ops/s  │
 │  500000       LazyCoarseOptimisticSet         67483.754  ± 5849.623   ops/s  │
 │  500000       LockedSet                       18097.330  ± 654.326    ops/s  │
-│  500000       EliminationCombiningUnrolledSet 728487.702 ± 65885.866  ops/s  │
+│  500000       EliminationCombiningUnrolledSet 750812.484  ± 48019.070 ops/s  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 * */

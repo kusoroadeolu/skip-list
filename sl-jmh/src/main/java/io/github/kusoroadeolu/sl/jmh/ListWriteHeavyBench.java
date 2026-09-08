@@ -70,7 +70,7 @@ public class ListWriteHeavyBench { //50% adds, 40% removes, 10% contains
             case "LazyOptimisticSet" -> new LazyOptimisticSet<>();
             case "LazyCoarseOptimisticSet" -> new LazyOptimisticCoarseSet<>();
             case "LockedSet" -> new LockedOrderedSet<>();
-            case "EliminationCombiningUnrolledSet" -> new ConcurrentEFUnrolledSet<>();
+            case "EliminationCombiningUnrolledSet" -> new ConcurrentCombiningUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
 

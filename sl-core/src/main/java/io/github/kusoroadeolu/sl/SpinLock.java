@@ -35,7 +35,7 @@ public class SpinLock implements Lock {
             if (canAcquire()) return;
             if (canAcquire()) return;
 
-            if (spins < SPINS_BEFORE_PARK) Thread.onSpinWait();
+            if (spins < SPINS_BEFORE_PARK) Thread.yield();
             else {
                 spins = 0;
                 LockSupport.parkNanos(NANOS_PARK_TIME);

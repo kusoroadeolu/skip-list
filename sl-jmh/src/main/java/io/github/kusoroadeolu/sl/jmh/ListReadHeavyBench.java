@@ -65,7 +65,7 @@ public class ListReadHeavyBench {
             case "LazyOptimisticSet" -> new LazyOptimisticSet<>();
             case "LazyCoarseOptimisticSet" -> new LazyOptimisticCoarseSet<>();
             case "LockedSet" -> new LockedOrderedSet<>();
-            case "EliminationCombiningUnrolledSet" -> new ConcurrentEFUnrolledSet<>();
+            case "EliminationCombiningUnrolledSet" -> new ConcurrentCombiningUnrolledSet<>();
             default -> throw new IllegalArgumentException();
         };
 

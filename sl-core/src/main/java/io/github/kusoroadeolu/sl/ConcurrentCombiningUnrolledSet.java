@@ -35,7 +35,7 @@ import static io.github.kusoroadeolu.sl.EliminationNode.NCPU;
 /**
  * @author kusoroadeolu
  * */
-public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
+public class ConcurrentCombiningUnrolledSet<T extends Comparable<T>> implements ConcurrentCollection<T> {
 
     private final LocalEFNode<T> left;
     private final LocalEFNode<T> right;
@@ -43,16 +43,16 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
     private final int minFull;
     private final int maxMerge;
     private final ThreadLocal<LocalArrays<T>> localArrays;
-    private static final int MAX_SPINS = 500;
-    private static final int SLOT_SPINS = MAX_SPINS / NCPU;
-    private static final int ARENA_LEN = NCPU;
+    private static final int MAX_SPINS = 512;
+    private static final int SLOT_SPINS = 128;
+    private static final int ARENA_LEN = 4;
     private static final int ARENA_MASK = ARENA_LEN - 1;
 
-    public ConcurrentEFUnrolledSet() {
+    public ConcurrentCombiningUnrolledSet() {
         this(64, 16);
     }
 
-    public ConcurrentEFUnrolledSet(int arrCap, int minFull) {
+    public ConcurrentCombiningUnrolledSet(int arrCap, int minFull) {
         this.left = new SentinelEFNode<>();
         this.right = new SentinelEFNode<>();
         left.lock(); //Visibility guarantees for plain reads under the lock
@@ -113,7 +113,7 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
                     scanAndMatchAdd(matchedValues, nodes);
 
                     int matchedSize = matchedValues.size();
-                    int size = curr.size();
+                    int size = curr.lpSize();
                     int newSize = size + matchedSize;
 
                     if (newSize <= aCap) {
@@ -190,7 +190,7 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
             if (pred.tryLock()) {
                 try {
                     if (isNotValid(pred, curr) || !curr.containsPlain(t)) return false;
-                    int size = curr.size();
+                    int size = curr.lpSize();
                     HashMap<T, CombiningRequest<T>> valuesToBeRemoved = new HashMap<>();
                     valuesToBeRemoved.put(t, ours);
                     scanAndMatchRemove(valuesToBeRemoved, nodes);
@@ -234,7 +234,7 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
                     pred.unlock();
                 }
             } else {
-                if (nodes[1] != r && awaitExchange(ours, nodes, curr.arena, (int) Thread.currentThread().threadId())) {
+                if (curr != r && awaitExchange(ours, nodes, curr.arena, (int) Thread.currentThread().threadId())) {
                     Boolean status = awaitStatus(ours);
                     if (status != null) return status;
                 }
@@ -301,13 +301,15 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
         }
     }
 
-    boolean awaitExchange(CombiningRequest<T> ours, LocalEFNode<T>[] nodes , AtomicReferenceArray<CombiningRequest<T>> arena, int start) {
-        for (int i = 0, totalSpins = 0; totalSpins < MAX_SPINS && i < ARENA_LEN; ++i){
+    boolean awaitExchange(CombiningRequest<T> ours, LocalEFNode<T>[] nodes, AtomicReferenceArray<CombiningRequest<T>> arena, int start) {
+        var curr = nodes[1];
+
+        for (int i = 0, totalSpins = 0; !curr.loMarked() && totalSpins < MAX_SPINS && i < ARENA_LEN; ++i){
             int slot = (start + i) & ARENA_MASK;
             CombiningRequest<T> theirs = arena.getAcquire(slot);
             if (theirs == free()) {
-                ours.pred = nodes[0]; //Backed by volatile write
-                ours.curr = nodes[1];
+                ours.pred = nodes[0];
+                ours.curr = nodes[1]; //Visibility is ensured through by volatile write
                 if (arena.compareAndSet(slot, free(), ours)) {
                     int slotSpins = 0;
                     for (;;) {
@@ -325,11 +327,13 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
                         Thread.onSpinWait();
                     }
                 }
+
+                Thread.yield(); //yield processor, let other threads make progress before we continue waiting
             }
 //            else if (theirs.op() != ours.op() && theirs.value() == ours.value()
 //                    && arena.compareAndSet(slot, theirs, free())) {
 //                return true;
-//            } Want to maintain strict set invaraiants for now, so we have to uncomment this
+//            } Want to maintain strict set invaraiants for now, so we have to remove this
 
         }
 
@@ -451,7 +455,7 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
         int removed = 0;
         for (int i = 0; size > 0 && i < arrayCap; ++i) {
             var value = curr.lpArray(i);
-            CombiningRequest<T> current = null;
+            CombiningRequest<T> current;
             if (value != null && (current = valuesToRemove.remove(value)) != null) {
                 //remove from the map as we will rescan to mark unseen values as failed
                 var elem = curr.lpArray(--size);
@@ -504,19 +508,6 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
 
     public String toString() {
         return nodeMap().toString();
-    }
-
-    public int nodeExistsCount() {
-        return localArrays.get().nodeExists;
-    }
-
-    public int nodeDoesntExistCount() {
-        return localArrays.get().nodeDoesntExist;
-    }
-
-    public void reset() {
-        localArrays.get().nodeExists = 0;
-        localArrays.get().nodeDoesntExist = 0;
     }
 
     private static final Object FREE = null;
@@ -777,8 +768,6 @@ public class ConcurrentEFUnrolledSet<T extends Comparable<T>> implements Concurr
         final LocalEFNode<T>[] nodes; //0 - pred, 1 - curr
         //Used for storing indices to prevent extra traversals to calculate size;
 
-        int nodeExists;
-        int nodeDoesntExist;
 
         public LocalArrays() {
             this.nodes = new LocalEFNode[2];

@@ -51,9 +51,9 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
     private final ThreadLocal<LocalArrays<T>> localArrays;
 
     private static final Object FREE = null;
-    private static final int MAX_SPINS = 500;
-    private static final int SLOT_SPINS = MAX_SPINS / NCPU;
-    private static final int ARENA_LEN = NCPU / 2;
+    private static final int MAX_SPINS = 512;
+    private static final int SLOT_SPINS = 128;
+    private static final int ARENA_LEN = 4;
     private static final int ARENA_MASK = ARENA_LEN - 1;
 
     public ConcurrentEliminationUnrolledSet() {
@@ -143,7 +143,7 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
                     info = new ThreadInfo<>(t, Operation.ADD);
                 var arena = curr.arena;
                 int start = ThreadLocalRandom.current().nextInt();
-                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) return true;
+                if (scanAndMatch(info, arena, start) || awaitExchange(info, curr ,arena, start)) return true;
             }
         }
     }
@@ -227,7 +227,7 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
                     info = new ThreadInfo<>(t, Operation.REMOVE);
                 int start = ThreadLocalRandom.current().nextInt();
                 var arena = curr.arena;
-                if (scanAndMatch(info, arena, start) || awaitExchange(info, arena, start)) return true;
+                if (scanAndMatch(info, arena, start) || awaitExchange(info, curr ,arena, start)) return true;
             }
         }
     }
@@ -247,8 +247,8 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
         return false;
     }
 
-    boolean awaitExchange(ThreadInfo<T> ours, AtomicReferenceArray<ThreadInfo<T>> arena, int start) {
-        for (int i = 0, totalSpins = 0; totalSpins < MAX_SPINS && i < ARENA_LEN; ++i){
+    boolean awaitExchange(ThreadInfo<T> ours, EliminationNode<T> curr ,AtomicReferenceArray<ThreadInfo<T>> arena, int start) {
+        for (int i = 0, totalSpins = 0; !curr.loMarked() &&  totalSpins < MAX_SPINS && i < ARENA_LEN; ++i){
             int slot = (start + i) & ARENA_MASK;
             ThreadInfo<T> theirs = arena.getAcquire(slot);
             if (theirs == free()) {
@@ -274,6 +274,7 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
                 return true;
             }
 
+            Thread.yield();
         }
 
         return false; //Failed to match
@@ -446,7 +447,7 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
 
     static <T extends Comparable<T>> void removeValueAtIndex(int index, int size , EliminationNode<T> curr) {
         int replacement = size - 1;
-        if (index < replacement) { //Array is logically empty or we were the last value in the array
+        if (index < replacement) { //We were the last value in the array
             curr.soArray(index, curr.lpArray(replacement)); //Move the value at swapIndex forward first before nulling out
             curr.spArray(replacement, null);
         } else {
