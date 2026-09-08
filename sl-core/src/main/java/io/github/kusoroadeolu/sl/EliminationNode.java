@@ -5,6 +5,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static io.github.kusoroadeolu.sl.ConcurrentEliminationUnrolledSet.free;
 
@@ -23,21 +24,21 @@ public class EliminationNode<T extends Comparable<T>> {
     public EliminationNode(T anchor, int capacity) {
         this.anchor = anchor;
         this.array = new Object[capacity];
-        this.lock = new SpinLock();
+        this.lock = new ReentrantLock();
         arena = fillArena();
     }
 
     public EliminationNode(T anchor, int capacity, AtomicReferenceArray<ThreadInfo<T>> arena) {
         this.anchor = anchor;
         this.array = new Object[capacity];
-        this.lock = new SpinLock();
+        this.lock = new ReentrantLock();
         this.arena = arena;
     }
 
     public EliminationNode(Object[] initialArray) {
         this.anchor = (T) initialArray[0];
         this.array = initialArray;
-        this.lock = new SpinLock();
+        this.lock = new ReentrantLock();
         arena = fillArena();
 
     }
@@ -45,7 +46,7 @@ public class EliminationNode<T extends Comparable<T>> {
     public EliminationNode(T anchor, Object[] array) {
         this.anchor = anchor;
         this.array = array;
-        this.lock = new SpinLock();
+        this.lock = new ReentrantLock();
         arena = fillArena();
     }
 

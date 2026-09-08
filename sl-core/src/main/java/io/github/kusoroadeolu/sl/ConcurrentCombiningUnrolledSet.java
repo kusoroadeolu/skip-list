@@ -5,6 +5,7 @@ import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static io.github.kusoroadeolu.sl.ConcurrentUnrolledSet.Operation;
 import static io.github.kusoroadeolu.sl.EliminationNode.NCPU;
@@ -151,7 +152,7 @@ public class ConcurrentCombiningUnrolledSet<T extends Comparable<T>> implements 
                  //We want to publish then wait
                 if (ours == null) ours = new CombiningRequest<>(Operation.ADD,  value);
 
-                if (nodes[1] != r && awaitExchange(ours, nodes, curr.arena, (int) Thread.currentThread().threadId())) {
+                if (curr != r && awaitExchange(ours, nodes, curr.arena, (int) Thread.currentThread().threadId())) {
                     Boolean status = awaitStatus(ours);
                     if (status != null) return status;
                 }
@@ -609,14 +610,14 @@ public class ConcurrentCombiningUnrolledSet<T extends Comparable<T>> implements 
         public LocalEFNode(T anchor, int capacity) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
             arena = fillArena();
         }
 
         public LocalEFNode(T anchor, int capacity, AtomicReferenceArray<CombiningRequest<T>> arena) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
             this.arena = arena;
         }
 
@@ -624,14 +625,14 @@ public class ConcurrentCombiningUnrolledSet<T extends Comparable<T>> implements 
         public LocalEFNode(Object[] initialArray) {
             this.anchor = (T) initialArray[0];
             this.array = initialArray;
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
             arena = fillArena();
         }
 
         public LocalEFNode(T anchor, Object[] array) {
             this.anchor = anchor;
             this.array = array;
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
             arena = fillArena();
         }
 

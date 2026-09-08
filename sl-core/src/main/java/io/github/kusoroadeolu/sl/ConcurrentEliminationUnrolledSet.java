@@ -238,7 +238,7 @@ public class ConcurrentEliminationUnrolledSet<T extends Comparable<T>> implement
             int slot = (start + i) & ARENA_MASK;
             ThreadInfo<T> theirs = arena.getAcquire(slot);
             if (theirs != free() && theirs.op() != ours.op()
-                    && theirs.value() == ours.value()
+                    && ours.value().compareTo(theirs.value()) == 0
                     && arena.compareAndSet(slot, theirs, free())) {
                 return true;
             }

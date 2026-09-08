@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /*
 * Based on the thesis https://utd-ir.tdl.org/server/api/core/bitstreams/ca02e64a-84c8-45c9-9cb2-721ead65df84/content
@@ -457,20 +458,20 @@ public class ConcurrentUnrolledSet<T extends Comparable<T>> implements Concurren
         public Node(T anchor, int capacity) {
             this.anchor = anchor;
             this.array = new Object[capacity];
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
         }
 
         public Node(Object[] initialArray) {
             this.anchor = (T) initialArray[0];
             this.array = initialArray;
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
 
         }
 
         public Node(T anchor, Object[] array) {
             this.anchor = anchor;
             this.array = array;
-            this.lock = new SpinLock();
+            this.lock = new ReentrantLock();
         }
 
         void lock() {

@@ -80,7 +80,7 @@ public class ZipfianBenchmark {
     @Param({"500000"})
     int keySpaceSize;
 
-    @Param({"LockFreeSet", "UnrolledSet" ,"PathCopyingSet", "EliminationUnrolledSet", "LazyOptimisticSet", "LazyCoarseOptimisticSet", "LockedSet", "EliminationCombiningUnrolledSet"})
+   @Param({"LockFreeSet", "UnrolledSet" ,"PathCopyingSet", "EliminationUnrolledSet", "LazyOptimisticSet", "LazyCoarseOptimisticSet", "LockedSet", "EliminationCombiningUnrolledSet"})
     private String type;
 
     private ConcurrentCollection<Integer> set;
@@ -212,9 +212,9 @@ public class ZipfianBenchmark {
 │  KeySpaceSize Type                            Score      Error       Unit   │
 │  ------------ ------------------------------- ---------- ----------- -----  │
 │  500000       LockFreeSet                     34068.440  ± 4369.103  ops/s  │
-│  500000       UnrolledSet                     549576.051 ± 26394.525 ops/s  │
+│  500000       UnrolledSet                     542413.888 ± 29862.310 ops/s  │
 │  500000       PathCopyingSet                  9374.403   ± 10591.912 ops/s  │
-│  500000       EliminationUnrolledSet          524242.316 ± 27137.899 ops/s  │
+│  500000       EliminationUnrolledSet          525447.030 ± 25154.151 ops/s  │
 │  500000       LazyOptimisticSet               28836.718  ± 4146.438  ops/s  │
 │  500000       LazyCoarseOptimisticSet         28646.652  ± 4831.145  ops/s  │
 │  500000       LockedSet                       12356.971  ± 831.821   ops/s  │
